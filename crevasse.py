@@ -7,7 +7,7 @@ import numpy as np
 # import scipy.integrate as integrate
 # import scipy.special as special
 # from os import path
-
+from scipy.optimize import fminbound
 def elasticity_solutions(case='full-minus-prestress', 
                          geometry = {'W':20000,'H':200,'Lc':500, 'Wc':1, 'Hc': 5}, 
                          materials = {'E':1e10, 'nu':0.3, 'rho':910, 'rhow':1024, 'g':9.81},
@@ -172,12 +172,10 @@ def elasticity_solutions(case='full-minus-prestress',
     
    
     if case == 'full-minus-prestress':
-
-        def swell_height(x=0):
-            return swell_amplitude*np.sin( x/swell_wavelength + swell_phase )
-        
+       
         P0_fro = Expression(("rho*g*(H-x[1]) ","0"), degree=1,
                             Hw=Hw, rhow=rhow,g=g, rho=rho, H=H) 
+        
         P_fro  = Expression(("(x[1]<Hw) ? rhow*g*(Hw + A*sin(2*pi*x[0]/L + P) - x[1]) : 0","0"), 
                             degree=1,
                             Hw=Hw, rhow=rhow,g=g,
@@ -187,6 +185,7 @@ def elasticity_solutions(case='full-minus-prestress',
                             degree=1,
                             Hw=Hw, rhow=rhow,g=g,
                             A=swell_amplitude,L=swell_wavelength,P=swell_phase)
+        
         P0_bot = Expression(("0","rho*g*(H-x[1]) "), degree=1,
                             Hw=Hw, rhow=rhow,g=g, rho=rho, H=H,pi=np.pi) 
         
@@ -416,3 +415,37 @@ def sif(geom,mats,verbose=False,loc='surface',swell_amplitude=0.0,swell_phase=0.
     KII = dv*sqrt(2*pi / r) * mu/(3-4*mats['nu']+1)
     
     return (KI,KII)
+
+
+def sif_wrapper(swell_phase,this_run,crevasse_location,geom,mats,verbose=False):
+    if verbose:
+        print('     Phase = %f rad'%swell_phase)
+    g = geom
+    g['Lc'] = crevasse_location
+    these_Ks = sif(g,mats,verbose=False,loc=this_run, swell_amplitude=1.0,swell_phase=swell_phase)
+    if verbose:
+        print('     KI = %f'%these_Ks[0]);
+    return these_Ks
+
+def find_max_phase(this_run,mode,L,geom,mats,verbose=False):
+    if verbose:
+        print('Finding Phase with max K:');
+    if mode=='I':
+        obj_fun = lambda phase : sif_wrapper(phase,this_run,L,geom,mats,verbose)[0]
+    elif mode=='II':
+        obj_fun = lambda phase : sif_wrapper(phase,this_run,L,geom,mats,verbose)[1]
+        
+    max_phase,max_KI,trash,trash = fminbound(obj_fun,0,2*np.pi,full_output=True,xtol=1e-3)
+#     print('Just finished length %f'%L)
+    return max_phase, max_KI
+
+def call_pmap(this_run,mode):
+    
+    pool = multiprocessing.Pool(processes=96)
+    find_max_phase_partial = partial (find_max_phase,this_run,mode)
+    result_list = pool.map(find_max_phase_partial, Lcs_swell)
+    
+    pool.close()
+    pool.join()
+    
+    return result_list
