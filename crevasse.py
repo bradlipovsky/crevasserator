@@ -7,7 +7,12 @@ import numpy as np
 # import scipy.integrate as integrate
 # import scipy.special as special
 # from os import path
+import multiprocessing
 from scipy.optimize import fminbound
+from functools import partial
+
+
+
 def elasticity_solutions(case='full-minus-prestress', 
                          geometry = {'W':20000,'H':200,'Lc':500, 'Wc':1, 'Hc': 5}, 
                          materials = {'E':1e10, 'nu':0.3, 'rho':910, 'rhow':1024, 'g':9.81},
@@ -427,7 +432,7 @@ def sif_wrapper(swell_phase,this_run,crevasse_location,geom,mats,verbose=False):
         print('     KI = %f'%these_Ks[0]);
     return these_Ks
 
-def find_max_phase(this_run,mode,L,geom,mats,verbose=False):
+def find_max_phase(this_run,mode,geom,mats,verbose,L):
     if verbose:
         print('Finding Phase with max K:');
     if mode=='I':
@@ -439,11 +444,11 @@ def find_max_phase(this_run,mode,L,geom,mats,verbose=False):
 #     print('Just finished length %f'%L)
     return max_phase, max_KI
 
-def call_pmap(this_run,mode):
+def call_pmap(geom,mats,this_run,mode,crevasse_locations,nproc=96,verbose=False):
     
-    pool = multiprocessing.Pool(processes=96)
-    find_max_phase_partial = partial (find_max_phase,this_run,mode)
-    result_list = pool.map(find_max_phase_partial, Lcs_swell)
+    pool = multiprocessing.Pool(processes=nproc)
+    find_max_phase_partial = partial (find_max_phase,this_run,mode,geom,mats,verbose)
+    result_list = pool.map(find_max_phase_partial, crevasse_locations)
     
     pool.close()
     pool.join()
