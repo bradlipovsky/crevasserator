@@ -3,22 +3,14 @@
 # os.environ['PATH'] = "/home/bradlipovsky/anaconda3/envs/fenicsproject/bin:" + os.environ['PATH']
 # print(os.environ['PATH'])
 
-from dolfin import *
-from mshr import *
-import matplotlib.pyplot as plt
-# %matplotlib notebook
 from time import perf_counter
 import numpy as np
 import pickle
-import scipy.integrate as integrate
-import scipy.special as special
 from os import path
-import multiprocessing
-from functools import partial
 import crevasse as c # main module for this project
 from importlib import reload
-from scipy.optimize import fminbound
 reload(c)
+
 print (dolfin.__version__)
 
 
@@ -55,7 +47,8 @@ for mode in ('I','II'):
             g = geom
             t1_start = perf_counter() 
 
-            output.append(c.call_pmap(this_run,mode))
+#             output.append(c.call_pmap(this_run,mode))
+            output.append(c.call_pmap(geom,mats,'surface','I',Lcs_swell,nproc,verbose=False))
 
             t1_stop = perf_counter()    
             print("Elapsed time in outer loop: %f s."%(t1_stop-t1_start))
