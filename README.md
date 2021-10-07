@@ -9,4 +9,4 @@ The notebooks contain:
 - An example parameter space study, crevasse-model-parameter-space.ipynb
 - An effort to debug the non-smooth results, test-swell-phase-picker.ipynb
 
-The crevasse.py module makes heavy use of (FeNiCS)[fenicsproject.org]. I prefer running FeNiCS out of a docker image with Jupyer Hub enabled, as described (here)[https://fenics.readthedocs.io/projects/containers/en/latest/jupyter.html].
+The crevasse.py module makes heavy use of [FeNiCS](fenicsproject.org). I prefer running FeNiCS out of a docker image with Jupyer Hub enabled, as described [here](https://fenics.readthedocs.io/projects/containers/en/latest/jupyter.html).
