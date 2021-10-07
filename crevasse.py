@@ -88,15 +88,24 @@ def elasticity_solutions(case='full-minus-prestress',
                     and near(x[1],H-Hc)\
                     and on_boundary
 
-
-    # Define the geometry and the mesh
+    
+    '''
+    Define the geometry and the mesh
+    '''
     
     boundary_points = [Point(0., 0), Point(W, 0), Point(W, H)]
-       
-    ice_front_num_pts=H # One meter spacing at ice front
-    for i in range(ice_front_num_pts):
-        boundary_points.append( Point(0.0,float((ice_front_num_pts-i)*H/ice_front_num_pts)))
-    
+
+    waterline_dy = 1
+    ice_front_dy = 1
+
+    y_points_top = np.arange(H,Hw+swell_amplitude,-ice_front_dy)
+    y_points_mid = np.arange(Hw+swell_amplitude,Hw-swell_amplitude,-waterline_dy)
+    y_points_bot = np.arange(Hw-swell_amplitude,0,-ice_front_dy)
+    y_points = np.concatenate((y_points_top, y_points_mid, y_points_bot))
+
+    for this_y in y_points:
+        boundary_points.append( Point(0.0,this_y) ) 
+
     ice = Polygon( boundary_points )
     
     
@@ -440,7 +449,7 @@ def find_max_phase(this_run,mode,geom,mats,verbose,L):
     elif mode=='II':
         obj_fun = lambda phase : sif_wrapper(phase,this_run,L,geom,mats,verbose)[1]
         
-    max_phase,max_KI,trash,trash = fminbound(obj_fun,0,2*np.pi,full_output=True,xtol=1e-3)
+    max_phase,max_KI,trash,trash = fminbound(obj_fun,0,2*np.pi,full_output=True,xtol=1e-4)
 #     print('Just finished length %f'%L)
     return max_phase, max_KI
 
