@@ -20,10 +20,10 @@ def main():
     D,flexural_gravity_wavelength= c.fgl(mats,geom)
 
     # Lcs_swell = Lcs
-    Lcs_swell = np.linspace(10,4*flexural_gravity_wavelength,10000)
+    Lcs_swell = np.linspace(10,2*flexural_gravity_wavelength,1000)
     # Lcs_swell = (100,200,300,600,1200,2400,4800,9600,19200)
 
-    filename='swell-sifs-hi-res-linear.pkl' 
+    filename='swell-sifs-med-res-linear.pkl' 
 
     if path.exists(filename):
         print('The output filename has already been used. \n\

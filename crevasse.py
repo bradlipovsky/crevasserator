@@ -20,6 +20,8 @@ def elasticity_solutions(case='full-minus-prestress',
                          swell_amplitude=0.0,
                          swell_phase=0.0,
                          swell_wavelength=1000.0,
+                         swell_forcing="everything",
+                         crevasse_refinement=np.nan,
                          verbose=False):
 
     W = geometry['W']
@@ -34,7 +36,11 @@ def elasticity_solutions(case='full-minus-prestress',
     rhow=materials['rhow']
     g=materials['g']
     
+    D = E/(1-nu**2) * H**3 / 12
+    flexural_gravity_wavelength = 2*np.pi*(D/(rhow*g))**(1/4)
     
+    if np.isnan(crevasse_refinement):
+        crevasse_refinement=flexural_gravity_wavelength
     
     mu = E/2./(1+nu)
     K = E/(3*(1-2*nu))
@@ -158,10 +164,19 @@ def elasticity_solutions(case='full-minus-prestress',
 
     # Refine the mesh.  From: https://fenicsproject.discourse.group/t/prescribing-spatially-varying-cell-sizes/527
     d = mesh.topology().dim()
-    refined_region = CompiledSubDomain("((x[0] < Lc + H/2) & (x[0] > Lc - H/2)) | (x[0] < Lc+2*H)",H=H,Lc=Lc)
-    r_markers = MeshFunction("bool", mesh, d, False)
-    refined_region.mark(r_markers, True)
-    mesh = refine(mesh,r_markers)
+    
+
+    # Refine in a region of +/- FGL from the crevasse. 
+    # Also refine near the ice front.
+    refined_region = CompiledSubDomain("((x[0] < Lc + dx) & (x[0] > Lc - dx))\
+                        | (x[0] < Lc+2*H)",H=H,Lc=Lc,dx=crevasse_refinement)
+    
+    number_of_refinement_iterations = 2
+    
+    for i in range(number_of_refinement_iterations):
+        r_markers = MeshFunction("bool", mesh, d, False)
+        refined_region.mark(r_markers, True)
+        mesh = refine(mesh,r_markers)
     
 #     mesh = RectangleMesh(Point(0., 0.), Point(W, H), Nx, Ny)
 
@@ -190,15 +205,25 @@ def elasticity_solutions(case='full-minus-prestress',
         P0_fro = Expression(("rho*g*(H-x[1]) ","0"), degree=1,
                             Hw=Hw, rhow=rhow,g=g, rho=rho, H=H) 
         
-        P_fro  = Expression(("(x[1]<Hw) ? rhow*g*(Hw + A*sin(2*pi*x[0]/L + P) - x[1]) : 0","0"), 
+        if (swell_forcing == 'everything') or (swell_forcing == 'front only'):
+            P_fro  = Expression(("(x[1]<Hw) ? rhow*g*(Hw + A*sin(2*pi*x[0]/L + P) - x[1]) : 0","0"), 
                             degree=1,
                             Hw=Hw, rhow=rhow,g=g,
                             A=swell_amplitude,L=swell_wavelength,P=swell_phase,pi=np.pi)
-        
-        P_bot  = Expression(("0","(x[1]<Hw) ? rhow*g*(Hw + A*sin(2*pi*x[0]/L + P)-x[1]) : 0"), 
+        else:
+            P_fro  = Expression(("(x[1]<Hw) ? rhow*g*(Hw - x[1]) : 0","0"), 
+                            degree=1,
+                            Hw=Hw, rhow=rhow,g=g)
+            
+        if (swell_forcing == 'everything') or (swell_forcing == 'bottom only'):
+            P_bot  = Expression(("0","(x[1]<Hw) ? rhow*g*(Hw + A*sin(2*pi*x[0]/L + P) - x[1]) : 0"), 
                             degree=1,
                             Hw=Hw, rhow=rhow,g=g,
-                            A=swell_amplitude,L=swell_wavelength,P=swell_phase)
+                            A=swell_amplitude,L=swell_wavelength,P=swell_phase,pi=np.pi)
+        else:
+            P_bot  = Expression(("0","(x[1]<Hw) ? rhow*g*(Hw - x[1]) : 0"), 
+                            degree=1,
+                            Hw=Hw, rhow=rhow,g=g)
         
         P0_bot = Expression(("0","rho*g*(H-x[1]) "), degree=1,
                             Hw=Hw, rhow=rhow,g=g, rho=rho, H=H,pi=np.pi) 
@@ -377,10 +402,13 @@ def sigma(v,lmbda,mu):
     dim = v.geometric_dimension()
     return 2.0*mu*eps(v) + lmbda*tr(eps(v))*Identity(dim)
 
-def sif(geom,mats,verbose=False,loc='surface',swell_amplitude=0.0,swell_phase=0.0):
+def sif(geom,mats,verbose=False,loc='surface',swell_amplitude=0.0,
+        swell_phase=0.0,swell_forcing='everything',crevasse_refinement=np.nan):
     
     U,mesh = elasticity_solutions(geometry=geom,crevasse_location=loc,
-                                 swell_amplitude=swell_amplitude,swell_phase=swell_phase)
+                                 swell_amplitude=swell_amplitude,swell_phase=swell_phase,
+                                 swell_forcing=swell_forcing,
+                                 crevasse_refinement=crevasse_refinement)
 
 
     Rc = 0.375
@@ -463,3 +491,8 @@ def call_pmap(geom,mats,this_run,mode,crevasse_locations,nproc=96,verbose=False)
     pool.join()
     
     return result_list
+
+def fgl(mats,geom):
+    D = mats['E']/(1-mats['nu']**2) * geom['H']**3 / 12
+    flexural_gravity_wavelength = 2*np.pi*(D/(mats['rhow']*mats['g']))**(1/4)
+    return D, flexural_gravity_wavelength
