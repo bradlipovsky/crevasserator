@@ -24,8 +24,20 @@ def elasticity_solutions(case='full-minus-prestress',
                          swell_wavelength=1000.0,
                          swell_forcing="everything",
                          refinement=np.nan,
-                         verbose=False):
+                         verbose=False,
+                         footloose=0.0):
+    """
+    elasticity_solutions solves the equations of plane strain elasticity with boundary conditions
+    that are representative of an iceshelf. 
+
+    :param case: gives numerous simplifications of the most realistic boundary conditions. For many
+    of the cases, analytical solutions are available (and are displayed if verbose=True).
+    :param footloose: is the length of a submarine ice foot (the front of the foot is at zero)
+    :return: the solution U and the mesh
+    """ 
     
+    if verbose:
+        print('Running %s model:'%case)
     # Meshing parameters
     if np.isnan(refinement):
         number_of_refinement_iterations = 3
@@ -73,11 +85,17 @@ def elasticity_solutions(case='full-minus-prestress',
 
     class Top(SubDomain):
         def inside(self, x, on_boundary):
-            return near(x[1], H) and on_boundary
+            return ((near(x[1], H) and x[0]>=footloose)\
+                    or (near(x[1], Hw) and x[0]<=footloose))\
+                    and on_boundary
 
     class Front(SubDomain):
+#         def inside(self, x, on_boundary):
+#             return near(x[0], 0) and on_boundary
         def inside(self, x, on_boundary):
-            return near(x[0], 0) and on_boundary
+            return ((near(x[0], 0) and x[1]<=Hw)\
+                    or (near(x[0], footloose) and x[1]>=Hw))\
+                    and on_boundary
         
     class BottomCrevasseWalls(SubDomain):
         def inside(self,x,on_boundary):
@@ -102,66 +120,22 @@ def elasticity_solutions(case='full-minus-prestress',
             return (x[0] >= Lc-Wc/2) and (x[0] <= Lc+Wc/2)\
                     and near(x[1],H-Hc)\
                     and on_boundary
-
-    
+        
     '''
     Define the geometry and the mesh
     '''
     if verbose:
         print('     Generating Mesh')
-    boundary_points = [Point(0., 0), Point(W, 0), Point(W, H)]
-
-    y_points_top = np.arange(H,Hw+swell_amplitude,-ice_front_dy)
-    y_points_mid = np.arange(Hw+swell_amplitude,Hw-swell_amplitude,-waterline_dy)
-    y_points_bot = np.arange(Hw-swell_amplitude,0,-ice_front_dy)
-    y_points = np.concatenate((y_points_top, y_points_mid, y_points_bot))
-
-    for this_y in y_points:
-        boundary_points.append( Point(0.0,this_y) ) 
-
-    ice = Polygon( boundary_points )
-
-    crevasse_points = []    
-    if crevasse_location=="surface":
-        for i in range(crevasse_num_pts+1):
-            x = Lc-Wc/2
-            y = float(H - i*Hc/crevasse_num_pts)
-            crevasse_points.append( Point(x,y))
-    #         print((x,y))
-        for i in range(crevasse_tip_num_pts+1):
-            y = H-Hc
-            x = float(Lc - Wc/2 + i*Wc/crevasse_tip_num_pts)
-            crevasse_points.append( Point(x,y))
-    #         print((x,y))    
-        for i in range(crevasse_num_pts+1):
-            x = Lc+Wc/2
-            y = float(H - (crevasse_num_pts-i)*Hc/crevasse_num_pts)
-            crevasse_points.append( Point(x,y))
-    #         print((x,y))
+        
+    three_corners = [Point(0., 0), Point(W, 0), Point(W, H)]
+    ice = build_ice(H,Hw,swell_amplitude,ice_front_dy,waterline_dy,three_corners,footloose)
+    crevasse = build_crevasse(geometry,crevasse_location,crevasse_num_pts,crevasse_tip_num_pts)
     
-    if crevasse_location=="bottom":
-        for i in range(crevasse_num_pts+1):
-            x = Lc+Wc/2
-            y = float(i*Hc/crevasse_num_pts)
-            crevasse_points.append( Point(x,y))
-    #         print((x,y))
-        for i in range(crevasse_tip_num_pts+1):
-            y = Hc
-            x = float(Lc + Wc/2 - i*Wc/crevasse_tip_num_pts)
-            crevasse_points.append( Point(x,y))
-    #         print((x,y))
-        for i in range(crevasse_num_pts+1):
-            x = Lc-Wc/2
-            y = float(Hc - i*Hc/crevasse_num_pts)
-            crevasse_points.append( Point(x,y))
-    #         print((x,y))
-
 
     if (swell_amplitude > 0.0) and (case != 'full-minus-prestress'):
         print ('SWELL IS ONLY IMPLEMENTED IN THE full-minus-prestress CASE.')
-    
         
-    crevasse = Polygon(crevasse_points)
+    
     mesh = generate_mesh ( ice - crevasse, 100)
 
     # Refine the mesh.  
@@ -193,18 +167,14 @@ def elasticity_solutions(case='full-minus-prestress',
         SurfaceCrevasseTip().mark(facets,4)
 
     ds = Measure("ds", subdomain_data=facets)
-
-#     V = VectorFunctionSpace(mesh, 'Lagrange', degree=1)
     V = VectorFunctionSpace(mesh, 'CG', 2)
     u = TrialFunction(V)
     v = TestFunction(V)
     
     if verbose:
         print("     Creating forms")
+        
     if case == 'full-minus-prestress':
-       
-        P0_fro = Expression(("rho*g*(H-x[1]) ","0"), degree=1,
-                            Hw=Hw, rhow=rhow,g=g, rho=rho, H=H) 
         
         if (swell_forcing == 'everything') or (swell_forcing == 'front only'):
             if verbose:
@@ -229,9 +199,16 @@ def elasticity_solutions(case='full-minus-prestress',
             P_bot  = Expression(("0","(x[1]<Hw) ? rhow*g*(Hw - x[1]) : 0"), 
                             degree=1,
                             Hw=Hw, rhow=rhow,g=g)
-        
-        P0_bot = Expression(("0","rho*g*(H-x[1]) "), degree=1,
-                            Hw=Hw, rhow=rhow,g=g, rho=rho, H=H,pi=np.pi) 
+
+        P0_fro = Expression(("(x[0]>fl) ? rho*g*(H-x[1]) : rho*g*(Hw-x[1])","0"), degree=1,
+                            Hw=Hw, rhow=rhow,g=g, rho=rho, H=H,fl=footloose) 
+        P0_bot = Expression(("0","(x[0]>fl) ? rho*g*(H-x[1]) : rho*g*(Hw-x[1])"), degree=1,
+                            Hw=Hw, rhow=rhow,g=g, rho=rho, H=H,pi=np.pi,fl=footloose) 
+            
+#         P0_fro = Expression(("rho*g*(H-x[1]) ","0"), degree=1,
+#                             Hw=Hw, rhow=rhow,g=g, rho=rho, H=H) 
+#         P0_bot = Expression(("0","rho*g*(H-x[1]) "), degree=1,
+#                             Hw=Hw, rhow=rhow,g=g, rho=rho, H=H,pi=np.pi) 
         
         bc = DirichletBC(V, Constant((0.,0.)), right)
         a = inner(sigma(v,lmbda,mu),eps(u))*dx + rhow*g*u[1]*v[1]*ds(1)
@@ -251,7 +228,8 @@ def elasticity_solutions(case='full-minus-prestress',
         
     if case == 'uniform-end-load-prestress':
 
-        P0_fro = Expression(("rho*g*H*(1-rho/rhow) ","0"), degree=1,Hw=Hw, rhow=rhow,g=g, rho=rho, H=H) 
+        P0_fro = Expression(("rho*g*H*(1-rho/rhow) ","0"), degree=1,
+                            Hw=Hw, rhow=rhow,g=g, rho=rho, H=H) 
         
         bc = DirichletBC(V, Constant((0.,0.)), right)
         a = inner(sigma(v,lmbda,mu),eps(u))*dx 
@@ -325,7 +303,7 @@ def elasticity_solutions(case='full-minus-prestress',
         L = inner(f, v)*dx  + dot(P_bot, v)*ds(1) 
     
     set_log_active(False)
-#    set_log_level(10)
+    #    set_log_level(10)
     
     
     print("     SOLVING")
@@ -334,7 +312,7 @@ def elasticity_solutions(case='full-minus-prestress',
     
     
     ux,uz=-1,-1
-    x0 = 0
+    x0 = footloose
     
     
     if case == 'uniform-end-load':
@@ -389,18 +367,82 @@ def elasticity_solutions(case='full-minus-prestress',
         uz = uz_free + uz_loaded
 
     if verbose == True:
-        print ('---- %s -----'%case)
-        print('Vertical deflection:')
+        print ('Results:')
+        print('     Vertical deflection:')
         if uz != -1:
-            print ('    Analytical: %f'%uz)
-        print ('    Numerical:  %f'%U(x0,H)[1])
-        print('Horizontal deflection:')
+            print ('         Analytical: %f'%uz)
+        print ('         Numerical:  %f'%U(x0,H)[1])
+        print('x0=%f'%x0)
+        print('     Horizontal deflection:')
         if ux!=-1:
-            print ('    Analytical: %f'%ux)
-        print ('    Numerical:  %f'%U(x0,H/2)[0])
+            print ('         Analytical: %f'%ux)
+        print ('         Numerical:  %f'%U(x0,H/2)[0])
 
         print(' ')
     return U,mesh
+
+def build_crevasse(geom,crevasse_location,crevasse_num_pts,crevasse_tip_num_pts):
+    Lc = geom['Lc']
+    Wc = geom['Wc']
+    Hc = geom['Hc']
+    H = geom['H']
+    
+    crevasse_points = []    
+    if crevasse_location=="surface":
+        for i in range(crevasse_num_pts+1):
+            x = Lc-Wc/2
+            y = float(H - i*Hc/crevasse_num_pts)
+            crevasse_points.append( Point(x,y))
+    #         print((x,y))
+        for i in range(crevasse_tip_num_pts+1):
+            y = H-Hc
+            x = float(Lc - Wc/2 + i*Wc/crevasse_tip_num_pts)
+            crevasse_points.append( Point(x,y))
+    #         print((x,y))    
+        for i in range(crevasse_num_pts+1):
+            x = Lc+Wc/2
+            y = float(H - (crevasse_num_pts-i)*Hc/crevasse_num_pts)
+            crevasse_points.append( Point(x,y))
+    #         print((x,y))
+    
+    if crevasse_location=="bottom":
+        for i in range(crevasse_num_pts+1):
+            x = Lc+Wc/2
+            y = float(i*Hc/crevasse_num_pts)
+            crevasse_points.append( Point(x,y))
+    #         print((x,y))
+        for i in range(crevasse_tip_num_pts+1):
+            y = Hc
+            x = float(Lc + Wc/2 - i*Wc/crevasse_tip_num_pts)
+            crevasse_points.append( Point(x,y))
+    #         print((x,y))
+        for i in range(crevasse_num_pts+1):
+            x = Lc-Wc/2
+            y = float(Hc - i*Hc/crevasse_num_pts)
+            crevasse_points.append( Point(x,y))
+    #         print((x,y))
+    crevasse = Polygon(crevasse_points)
+    return crevasse
+
+def build_ice(H,Hw,swell_amplitude,ice_front_dy,waterline_dy,boundary_points,footloose):
+    y_points_top = np.arange(H,Hw+swell_amplitude,-ice_front_dy)
+    y_points_mid = np.arange(Hw+swell_amplitude,Hw-swell_amplitude,-waterline_dy)
+    y_points_bot = np.arange(Hw-swell_amplitude,0,-ice_front_dy)
+    y_points = np.concatenate((y_points_top, y_points_mid, y_points_bot))
+    first_waterline_point = 0
+    for this_y in y_points:
+        if this_y > Hw:
+            boundary_points.append( Point(footloose,this_y) ) 
+        else:
+            if first_waterline_point == 0:
+                boundary_points.append( Point(footloose,Hw) ) 
+                boundary_points.append( Point(0.0,Hw) ) 
+                first_waterline_point = 1
+                if this_y == Hw:
+                    continue
+            boundary_points.append( Point(0.0,this_y) ) 
+    ice = Polygon( boundary_points )
+    return ice
 
 def eps(v):
     return sym(grad(v))
