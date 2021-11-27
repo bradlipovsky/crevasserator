@@ -9,23 +9,19 @@ reload(c)
 # print (dolfin.__version__)
 
 def main():
-    max_or_min = 'max'
+    # Output filename
+    filename='swell-sifs.pkl'
     
-    # Geometry: domain width, domain height,  crevasse location, crevasse width, crevasse height
+    # Geometry: domain width, domain height, 
+    #  crevasse location, crevasse width, crevasse height
     geom = {'W':60000,'H':300,'Lc':15, 'Wc':1, 'Hc': 5}
 
-    # Materials: Youngs modulus, poisson ratio, ice density, water density, gravity
+    # Materials: Youngs modulus, poisson ratio, 
+    #  ice density, water density, gravity
     mats = {'E':1e10, 'nu':0.3, 'rho':910, 'rhow':1024, 'g':9.81}
 
-    run_names = ('bottom','surface')
-
     D,flexural_gravity_wavelength, lam= c.fgl(mats,geom)
-
-    # Lcs_swell = Lcs
-    Lcs_swell = np.linspace(10,2*flexural_gravity_wavelength,1000)
-    # Lcs_swell = (100,200,300,600,1200,2400,4800,9600,19200)
-
-    filename='swell-sifs-med-res-linear-max.pkl' 
+    Lcs_swell = np.linspace(20,2*flexural_gravity_wavelength,10) 
 
     if path.exists(filename):
         print('The output filename has already been used. \n\
@@ -34,17 +30,25 @@ def main():
         if val!='YES':
             return
 
-    output=[]
-    for mode in ('I','II'):
-        for this_run in run_names:
-                print ('Running simulation with %s crevasses in Mode-%s.'%(this_run,mode))
+    output={}
+    for min_or_max in ('min','max'):
+        for mode in ('I','II'):
+            for this_run in ('bottom','surface'):
+                s = '%s K%s %s'%(this_run,mode,min_or_max)
+                print ('Running simulation with %s '
+                       'crevasses in Mode-%s.'%(this_run,mode))
 
                 t1_start = perf_counter() 
-                output.append(c.call_pmap(geom,mats,this_run,mode,Lcs_swell,96,extrema=max_or_min,
-                                         verbose=False))
-                t1_stop = perf_counter()    
-                
-                print("Elapsed time in outer loop: %f s."%(t1_stop-t1_start))
+                output[s] = c.call_pmap(geom,
+                                        mats,
+                                        this_run,
+                                        mode,Lcs_swell,96,
+                                        extrema=min_or_max,
+                                        verbose=False)
+                t1_stop = perf_counter()
+
+                print("Elapsed time in "
+                        "outer loop: %f s."%(t1_stop-t1_start))
 
     with open(filename,'wb') as f:
         pickle.dump(output, f)

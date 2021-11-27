@@ -23,9 +23,8 @@ def elasticity_solutions(case='full-minus-prestress',
                          swell_phase=0.0,
                          swell_wavelength=1000.0,
                          swell_forcing="everything",
-                         refinement=np.nan,
-                         verbose=False,
-                         footloose=0.0):
+                         refinement=3,
+                         verbose=False):
     """
     elasticity_solutions solves the equations of plane strain elasticity with boundary conditions
     that are representative of an iceshelf. 
@@ -38,11 +37,9 @@ def elasticity_solutions(case='full-minus-prestress',
     
     if verbose:
         print('Running %s model:'%case)
+        
     # Meshing parameters
-    if np.isnan(refinement):
-        number_of_refinement_iterations = 3
-    else:
-        number_of_refinement_iterations = refinement
+    number_of_refinement_iterations = refinement
     waterline_dy = 2
     ice_front_dy = 4
     crevasse_num_pts = 250
@@ -59,6 +56,10 @@ def elasticity_solutions(case='full-minus-prestress',
     rho=materials['rho']
     rhow=materials['rhow']
     g=materials['g']
+    if 'fl' in geometry.keys():
+        footloose=geometry['fl']
+    else:
+        footloose=0.0
     
     D, flexural_gravity_wavelength, lam = fgl(materials,geometry)
     crevasse_refinement=2*flexural_gravity_wavelength
@@ -176,7 +177,7 @@ def elasticity_solutions(case='full-minus-prestress',
         
     if case == 'full-minus-prestress':
         
-        if (swell_forcing == 'everything') or (swell_forcing == 'front only'):
+        if (swell_forcing == 'everything')  or (swell_forcing == 'front only'):
             if verbose:
                 print('     Applying swell boundary condition on the ice front')
             P_fro  = Expression(("(x[1]<Hw) ? rhow*g*(Hw + A*sin(2*pi*x[0]/L + P) - x[1]) : 0","0"), 
@@ -305,8 +306,8 @@ def elasticity_solutions(case='full-minus-prestress',
     set_log_active(False)
     #    set_log_level(10)
     
-    
-    print("     SOLVING")
+    if verbose:
+        print("     SOLVING")
     U = Function(V)
     solve(a==L,U,bc)
     
@@ -452,9 +453,9 @@ def sigma(v,lmbda,mu):
     return 2.0*mu*eps(v) + lmbda*tr(eps(v))*Identity(dim)
 
 def sif(geom,mats,verbose=False,loc='surface',swell_amplitude=0.0,
-        swell_phase=0.0,swell_forcing='everything',refinement=np.nan):
+        swell_phase=0.0,swell_forcing='everything',refinement=3):
     
-    U,mesh = elasticity_solutions(geometry=geom,crevasse_location=loc,
+    U,mesh = elasticity_solutions(geometry=geom,materials=mats, crevasse_location=loc,
                                  swell_amplitude=swell_amplitude,swell_phase=swell_phase,
                                  swell_forcing=swell_forcing,
                                  refinement=refinement,verbose=verbose)
@@ -533,7 +534,6 @@ def find_extreme_phase(this_run,mode,geom,mats,verbose,swell_forcing,extrema,L):
         obj_fun = lambda phase : sif_wrapper(phase,this_run,L,geom,mats,
                                              swell_forcing,verbose)[1]
 
-    
     if extrema=='max':
         # Max of f == the min of -f
         MINUS_ONE = -1
