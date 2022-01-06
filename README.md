@@ -1,7 +1,8 @@
+
 # crevasserator
 finite element codes to calculate glacier crevasse stress intensity factors
 
-Most functions are stored in crevasse.py
+Most of the important stuff is in crevasse.py
 
 The notebooks contain:
 
