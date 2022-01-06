@@ -1,3 +1,4 @@
+![monster truck jumping over a crevasse](crevasserator.png)
 
 # crevasserator
 finite element codes to calculate glacier crevasse stress intensity factors
