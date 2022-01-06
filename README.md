@@ -1,5 +1,5 @@
 ![monster truck jumping over a crevasse](crevasserator.png)
-logo made by [http://setholinger.github.io](Seth Olinger)
+logo made by [Seth Olinger](http://setholinger.github.io)
 
 # crevasserator
 finite element codes to calculate glacier crevasse stress intensity factors
