@@ -1,3 +1,5 @@
+[![DOI](https://zenodo.org/badge/399821666.svg)](https://zenodo.org/badge/latestdoi/399821666)
+
 ![monster truck jumping over a crevasse](crevasserator.png)
 logo made by [Seth Olinger](http://setholinger.github.io)
 
