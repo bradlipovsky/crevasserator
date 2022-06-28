@@ -15,3 +15,9 @@ The notebooks contain:
 - An effort to debug the non-smooth results, test-swell-phase-picker.ipynb
 
 The crevasse.py module makes heavy use of [FeNiCS](fenicsproject.org). I prefer running FeNiCS out of a docker image with Jupyer Hub enabled, as described [here](https://fenics.readthedocs.io/projects/containers/en/latest/jupyter.html).
+
+# Install
+This code uses the open source finite element library [FEniCS](https://fenicsproject.org/). For our purposes, FEniCS is best run using [Docker](https://www.docker.com/get-started/):
+```
+docker run --name crevasserator -w /home/fenics -v (pwd):/home/fenics/shared -d -p 127.0.0.1:8888:8888 quay.io/fenicsproject/stable 'jupyter-notebook --ip=0.0.0.0'
+```
