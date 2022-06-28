@@ -14,12 +14,18 @@ The notebooks contain:
 - An example parameter space study, crevasse-model-parameter-space.ipynb
 - An effort to debug the non-smooth results, test-swell-phase-picker.ipynb
 
-# Install and Run
+## Install and Run
 
 1. Clone this repository.
 2. Run a [Docker](https://www.docker.com/get-started/) container with [FEniCS](https://fenicsproject.org/) (the FEM backend). Details follow.
 
+### Jupyter Notebooks
 The easiest option to get started is to use Jupyter. The following docker command will launch a Jupyter Notebook server where you can run the notebooks.  Make sure
 ```
 docker run --name crevasserator -w /home/fenics -v (pwd):/home/fenics/shared -d -p 127.0.0.1:8888:8888 quay.io/fenicsproject/stable 'jupyter-notebook --ip=0.0.0.0'
+```
+
+### Interactive Terminal
+We have run parameter studies with up to 1e4 individual runs. Scaling in this way can't be achieved using Jupyter since the overhead is too high and the sessions don't persist.  Instead, for this application, we want to create a container with an interactive terminal:
+```
 ```
