@@ -20,7 +20,7 @@ The notebooks contain:
 2. Run a [Docker](https://www.docker.com/get-started/) container with [FEniCS](https://fenicsproject.org/) (the FEM backend). Details follow.
 
 ### Jupyter Notebooks
-The easiest option to get started is to use Jupyter. The following docker command will launch a Jupyter Notebook server where you can run the notebooks.  Make sure
+The easiest option to get started is to use Jupyter. The following docker command will launch a Jupyter Notebook server where you can run the notebooks.  *For the following docker run commands, run these from the directory that contains the cloned repo.*
 ```
 docker run --name crevasserator -w /home/fenics -v (pwd):/home/fenics/shared -d -p 127.0.0.1:8888:8888 quay.io/fenicsproject/stable 'jupyter-notebook --ip=0.0.0.0'
 ```
