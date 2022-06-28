@@ -22,6 +22,7 @@ def elasticity_solutions(case='full-minus-prestress',
                          swell_amplitude=0.0,
                          swell_phase=0.0,
                          swell_wavelength=1000.0,
+			 swell_wavelength_in_ice=2000.0,
                          swell_forcing="everything",
                          refinement=3,
                          verbose=False):
@@ -192,10 +193,10 @@ def elasticity_solutions(case='full-minus-prestress',
         if (swell_forcing == 'everything') or (swell_forcing == 'bottom only'):
             if verbose:
                 print('     Applying swell boundary condition on the ice bottom')
-            P_bot  = Expression(("0","(x[1]<Hw) ? rhow*g*(Hw + A*sin(2*pi*x[0]/L + P) - x[1]) : 0"), 
+            P_bot  = Expression(("0","(x[1]<Hw) ? rhow*g*(Hw + A*sin(2*pi*x[0]/Li + P) - x[1]) : 0"), 
                             degree=1,
                             Hw=Hw, rhow=rhow,g=g,
-                            A=swell_amplitude,L=swell_wavelength,P=swell_phase,pi=np.pi)
+                            A=swell_amplitude,L=swell_wavelength_in_ice,P=swell_phase,pi=np.pi)
         else:
             P_bot  = Expression(("0","(x[1]<Hw) ? rhow*g*(Hw - x[1]) : 0"), 
                             degree=1,
