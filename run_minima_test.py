@@ -13,7 +13,7 @@ reload(c)
 
 def main():
     # Output filename
-    filename='swell-sifs-one-Lc.pkl'
+    filename='output/swell-sifs-one-Lc.pkl'
     
     # Geometry: domain width, domain height, 
     #  crevasse location, crevasse width, crevasse height
@@ -25,8 +25,7 @@ def main():
 
     D,flexural_gravity_wavelength, lam= c.fgl(mats,geom)
 
-    number_of_locations = 10
-    Lcs_swell = 1.1*flexural_gravity_wavelength
+    Lc = 1.1*flexural_gravity_wavelength
 
     if path.exists(filename):
         print('The output filename has already been used. \n\

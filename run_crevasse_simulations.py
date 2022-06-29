@@ -15,7 +15,7 @@ reload(c)
 
 def main():
     # Output filename
-    filename='swell-sifs.pkl'
+    filename='output/swell-sifs.pkl'
     
     # Geometry: domain width, domain height, 
     #  crevasse location, crevasse width, crevasse height
