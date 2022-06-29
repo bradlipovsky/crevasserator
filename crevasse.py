@@ -453,15 +453,28 @@ def sigma(v,lmbda,mu):
     dim = v.geometric_dimension()
     return 2.0*mu*eps(v) + lmbda*tr(eps(v))*Identity(dim)
 
+
+
+
+
 def sif(geom,mats,verbose=False,loc='surface',swell_amplitude=0.0,
         swell_phase=0.0,swell_forcing='everything',refinement=3):
-    
-    U,mesh = elasticity_solutions(geometry=geom,materials=mats, crevasse_location=loc,
-                                 swell_amplitude=swell_amplitude,swell_phase=swell_phase,
+
+    '''
+    This function calculates SIFs from an elasticity solution.
+    '''    
+
+    # First, calculate the elasticity solution.
+    U,mesh = elasticity_solutions(geometry=geom,
+                                 materials=mats, 
+                                 crevasse_location=loc,
+                                 swell_amplitude=swell_amplitude,
+                                 swell_phase=swell_phase,
                                  swell_forcing=swell_forcing,
-                                 refinement=refinement,verbose=verbose)
+                                 refinement=refinement,
+                                 verbose=verbose)
 
-
+    # Next, calculate the SIFs.
     Rc = 0.375
     if loc=='surface':
         x1 = geom['Lc']-geom['Wc']/2
@@ -479,7 +492,7 @@ def sif(geom,mats,verbose=False,loc='surface',swell_amplitude=0.0,
         ytip = geom['Hc']
 
     #
-    # Plot the location of the CTOD measurements
+    # Plot the location of the displacement measurements
     #
 
 #     fig,ax=plt.subplots(figsize=(10,5))
@@ -512,6 +525,12 @@ def sif(geom,mats,verbose=False,loc='surface',swell_amplitude=0.0,
 
 def sif_wrapper(swell_phase,this_run,crevasse_location,geom,mats,
                     swell_forcing,verbose=False):
+    '''
+    This function is a helper function that puts the function sif() 
+    into a form that can be called in the objective function called 
+    by fminbound within the function find_extreme_phase.
+    '''
+
     if verbose:
         print('     Phase = %f rad'%swell_phase)
     g = geom
