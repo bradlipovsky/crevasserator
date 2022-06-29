@@ -21,8 +21,8 @@ def elasticity_solutions(case='full-minus-prestress',
                          crevasse_location="surface",
                          swell_amplitude=0.0,
                          swell_phase=0.0,
-                         swell_wavelength=1000.0,
-			 			 swell_wavelength_in_ice=2000.0,
+                         swell_wavelength=1340.0,
+			 			 swell_wavelength_in_ice=4610.0,
                          swell_forcing="everything",
                          refinement=3,
                          verbose=False):
@@ -196,7 +196,7 @@ def elasticity_solutions(case='full-minus-prestress',
             P_bot  = Expression(("0","(x[1]<Hw) ? rhow*g*(Hw + A*sin(2*pi*x[0]/Li + P) - x[1]) : 0"), 
                             degree=1,
                             Hw=Hw, rhow=rhow,g=g,
-                            A=swell_amplitude,L=swell_wavelength_in_ice,P=swell_phase,pi=np.pi)
+                            A=swell_amplitude,Li=swell_wavelength_in_ice,P=swell_phase,pi=np.pi)
         else:
             P_bot  = Expression(("0","(x[1]<Hw) ? rhow*g*(Hw - x[1]) : 0"), 
                             degree=1,
@@ -522,7 +522,14 @@ def sif_wrapper(swell_phase,this_run,crevasse_location,geom,mats,
         print('     KI = %f'%these_Ks[0]);
     return these_Ks
 
-def find_extreme_phase(this_run,mode,geom,mats,verbose,swell_forcing,extrema,L):
+def find_extreme_phase(this_run,mode,geom,
+                       mats,verbose,
+                       swell_forcing,extrema,L):
+    '''
+    Calculates the wave phase at which the extremal SIF is achieved.  This
+    function is run using multiprocessing in the function call_pmap, below.
+    '''
+
     if verbose:
         if extrema=='max':
             print('Finding Phase with MAX K:');
@@ -539,8 +546,10 @@ def find_extreme_phase(this_run,mode,geom,mats,verbose,swell_forcing,extrema,L):
         # Max of f == the min of -f
         MINUS_ONE = -1
         wrapwrapwrap = lambda x : MINUS_ONE*obj_fun(x)
-        extreme_phase,extreme_KI,trash,trash = fminbound(wrapwrapwrap,0,2*np.pi,
-                                                         full_output=True,xtol=1e-4)
+        extreme_phase,extreme_KI,trash,trash = fminbound(wrapwrapwrap,
+                                                         0,2*np.pi,
+                                                         full_output=True,
+                                                         xtol=1e-4)
         extreme_KI=MINUS_ONE*extreme_KI
         
     elif extrema=='min':
@@ -549,11 +558,23 @@ def find_extreme_phase(this_run,mode,geom,mats,verbose,swell_forcing,extrema,L):
                                                  full_output=True,xtol=1e-4)
     return extreme_phase, extreme_KI
 
-def call_pmap(geom,mats,this_run,mode,crevasse_locations,nproc=96,verbose=False,
-        swell_forcing='everything',extrema='max'):
+
+def call_pmap(geom,mats,this_run,mode,
+              crevasse_locations,nproc=96,verbose=False,
+              swell_forcing='everything',extrema='max'):
+    '''
+    This is the function you want to call if you want to run a parameter
+    space study in parallel. call_pmap is really just a wrapper that 
+    provides a nicer interface to the function find_extreme_phase through
+    partial and pool.map.
+    '''
+
     pool = multiprocessing.Pool(processes=nproc)
-    find_extreme_phase_partial = partial (find_extreme_phase,this_run,mode,geom,mats,
-                                        verbose,swell_forcing,extrema)
+
+    find_extreme_phase_partial = partial (find_extreme_phase,
+                                          this_run,mode,geom,mats,
+                                          verbose,swell_forcing,extrema)
+
     result_list = pool.map(find_extreme_phase_partial, crevasse_locations)
     
     pool.close()
@@ -561,19 +582,33 @@ def call_pmap(geom,mats,this_run,mode,crevasse_locations,nproc=96,verbose=False,
     
     return result_list
 
+
+
+
 def fgl(mats,geom):
+    '''
+    Calculates the flexural gravity wavelength and the flexural rigidity.
+    '''
+
     D = mats['E']/(1-mats['nu']**2) * geom['H']**3 / 12
-    flexural_gravity_wavelength = 2*np.pi*(D/(mats['rhow']*mats['g']))**(1/4)
+    flexural_gravity_wavelength = 2*np.pi*(D/(mats['rhow']\
+                                           *mats['g']))**(1/4)
     lam = (4*D/(mats['rhow']*mats['g']))**(1/4)
     return D, flexural_gravity_wavelength, lam
 
+
+
 def analytical_KI(geom,mats,swell_height=0):
+    '''
+    Calculates the van der Veen analytical solutions for KI
+    '''
     
     f_new = lambda x: f(x,geom,mats)
     dK = integrate.quad(f_new, 0, geom['Hc'])
-    K_crack_face_loading_surface = 2*mats['rho']*mats['g']/np.sqrt(np.pi*geom['Hc']) * dK[0]
-
-    sig0 = mats['rho']*mats['g']*(geom['H']+swell_height) / 2 *(1-mats['rho']/mats['rhow'])
+    K_crack_face_loading_surface = 2*mats['rho']*mats['g']\
+                                    /np.sqrt(np.pi*geom['Hc']) * dK[0]
+    sig0 = mats['rho']*mats['g']*(geom['H']+swell_height)\
+              / 2 *(1-mats['rho']/mats['rhow'])
     KI_analytical = 1.12 * sig0 * sqrt(np.pi * geom['Hc'])
     KI_analytical += K_crack_face_loading_surface
     
@@ -584,8 +619,14 @@ def analytical_KI(geom,mats,swell_height=0):
     
     return KI_analytical, KI_analytical_bottom
 
+
+
 def analytical_KI_bending(geom,mats,Lcs):
-    
+    '''
+    Calculates analytical solutions that combine the van der Veen 
+    solution with bending stresses.
+    ''' 
+
     D, flexural_gravity_wavelength,lam = fgl(mats,geom)
     r = mats['rho']/mats['rhow']
     m0 = mats['rho']*mats['g']*geom['H']**3 / 12 * (3*r - 2*r**2 - 1)
@@ -599,30 +640,37 @@ def analytical_KI_bending(geom,mats,Lcs):
                 + 1.12 * (sig_flex) * np.sqrt(np.pi * geom['Hc']) / 1e6
 
     KI_analytical_bending_bottom = KI_analytical_bottom/1e6 \
-                              - 1.12 * (sig_flex) * np.sqrt(np.pi * geom['Hc']) / 1e6
+                - 1.12 * (sig_flex) * np.sqrt(np.pi * geom['Hc']) / 1e6
     
     return KI_analytical_bending,KI_analytical_bending_bottom
 
 def f(y,geom,mats):
-    # Integral kernel for Surface Crevasses
+    '''
+    van der Veen Integral kernel for Surface Crevasses
+    '''
     gamma = y/geom['Hc']
     lambd = geom['Hc']/geom['H']
     val =  3.52*(1-gamma)/(1-lambd)**(3/2)
     val += - (4.35-5.28*gamma)/(1-lambd)**(1/2)
-    val += ( (1.30 - 0.3*gamma**(3/2)) / (1-gamma**2)**(1/2) + 0.83 - 1.76*gamma) \
+    val += ( (1.30 - 0.3*gamma**(3/2))\
+            / (1-gamma**2)**(1/2) + 0.83 - 1.76*gamma) \
             * (1 - (1-gamma)*lambd)
     return val
 
 
 def f_bot(y,geom,mats):
-    # Integral kernel for bottom crevasses
+    '''
+    van der Veen integral kernel for bottom crevasses
+    '''
     Hw = mats['rho']/mats['rhow'] * geom['H']
-    sig = lambda y: mats['rhow']*mats['g']*(Hw-y) - mats['rho']*mats['g']*(geom['H']-y)
+    sig = lambda y: mats['rhow']*mats['g']*(Hw-y)\
+             - mats['rho']*mats['g']*(geom['H']-y)
     gamma = y/geom['Hc']
     lambd = geom['Hc']/geom['H']
     kernel =  3.52*(1-gamma)/(1-lambd)**(3/2)
     kernel += - (4.35-5.28*gamma)/(1-lambd)**(1/2)
-    kernel += ( (1.30 - 0.3*gamma**(3/2)) / (1-gamma**2)**(1/2) + 0.83 - 1.76*gamma) \
+    kernel += ( (1.30 - 0.3*gamma**(3/2))\
+                / (1-gamma**2)**(1/2) + 0.83 - 1.76*gamma) \
                 * (1 - (1-gamma)*lambd)
     val = sig(y) * kernel
     return val

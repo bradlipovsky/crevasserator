@@ -1,7 +1,5 @@
 '''
-
-This script runs the parameter space study that examines stress intensity 
-factors as a function of distance from the ice front.
+This script tests the function
 
 '''
 

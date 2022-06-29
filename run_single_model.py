@@ -1,3 +1,13 @@
+'''
+
+This script carries out a single model run. This is useful for testing new 
+features and for learning about how the code works.
+
+After the solution is calculated, it is output in a format that can be read
+with ParaView.
+
+'''
+
 import crevasse as c # main module for this project
 from dolfin import *
 
