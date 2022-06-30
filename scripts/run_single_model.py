@@ -1,9 +1,8 @@
 '''
 
-This script carries out a single model run. This is useful for testing new 
-features and for learning about how the code works.
-
-After the solution is calculated, it is output in a format that can be read
+This script carries out a single model run. This is useful for testing
+new features and for learning about how the code works. After the 
+solution is calculated, it is output in a format that can be read
 with ParaView.
 
 '''
@@ -26,13 +25,13 @@ def main():
                 verbose=True,crevasse_location="surface",
                 geometry=geom,swell_amplitude=0.0, swell_phase=0.0)
     
-    File("example_mesh.xml") << mesh
-    File("example.pvd") << U
+    File("../output/example_mesh.xml") << mesh
+    File("../output/example.pvd") << U
     
     stress = c.sigma(U,mats['lmbda'],mats['mu'])
     TSpace = TensorFunctionSpace(mesh, "CG", 1)
     q = project(stress, TSpace)
-    File("example_stress.pvd") << q
+    File("../output/example_stress.pvd") << q
 
 if __name__ == "__main__":
     main()

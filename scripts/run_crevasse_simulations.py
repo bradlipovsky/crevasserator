@@ -15,11 +15,19 @@ reload(c)
 
 def main():
     # Output filename
-    filename='output/swell-sifs.pkl'
-    
+    filename='../output/swell-sifs.pkl'
+    c.test_filename(filename)
+ 
     # Geometry: domain width, domain height, 
     #  crevasse location, crevasse width, crevasse height
-    geom = {'W':60000,'H':300,'Lc':15, 'Wc':1, 'Hc': 5}
+    geom = {'W':60000,
+        'H':300,
+        'Lc':15,
+        'Wc':1,
+        'Hc': 5,
+        'fl':0,
+        'swell_wavelength':1340.0,
+        'ice_wavelength':4610.0}
 
     # Materials: Youngs modulus, poisson ratio, 
     #  ice density, water density, gravity
@@ -30,13 +38,6 @@ def main():
     number_of_locations = 10
     Lcs_swell = np.linspace(20,2*flexural_gravity_wavelength,
                            number_of_locations)
-
-    if path.exists(filename):
-        print('The output filename has already been used. \n\
-                To be safe, rename this file if you want to re-run.')
-        val = input("Type YES to continue.")
-        if val!='YES':
-            return
 
     output={}
     number_of_processors = min(number_of_locations,48)

@@ -205,7 +205,7 @@ def elasticity_solutions(case='full-minus-prestress',
 
             if verbose:
                 print('     Applying swell bc on the ice front')
-            P_fro  = Expression(("(x[1]<Hw) ? rhow*g*(Hw "\
+            P_fro  = Expression(("(x[1]<Hw) ? rhow*g*(Hw "
                             "+ A*sin(2*pi*x[0]/L + P) - x[1]) : 0","0"), 
                             degree=1,
                             Hw=Hw, rhow=rhow,g=g,
@@ -221,7 +221,7 @@ def elasticity_solutions(case='full-minus-prestress',
 
             if verbose:
                 print('     Applying swell bc on the ice bottom')
-            P_bot  = Expression(("0","(x[1]<Hw) ? rhow*g*(Hw + "\
+            P_bot  = Expression(("0","(x[1]<Hw) ? rhow*g*(Hw + "
                             "A*sin(2*pi*x[0]/L + P) - x[1]) : 0"), 
                             degree=1,
                             Hw=Hw, rhow=rhow,g=g,
@@ -232,11 +232,11 @@ def elasticity_solutions(case='full-minus-prestress',
                             degree=1,
                             Hw=Hw, rhow=rhow,g=g)
 
-        P0_fro = Expression(("(x[0]>=fl) ? rho*g*(H-x[1]) :"\ 
+        P0_fro = Expression(("(x[0]>=fl) ? rho*g*(H-x[1]) :"
                              "rho*g*(Hw-x[1])","0"), degree=1,
                             Hw=Hw, rhow=rhow,g=g, rho=rho, H=H,fl=footloose)
         
-        P0_bot = Expression(("0","(x[0]>=fl) ? rho*g*(H-x[1]) :"\
+        P0_bot = Expression(("0","(x[0]>=fl) ? rho*g*(H-x[1]) :"
                             "rho*g*(Hw-x[1])"), degree=1,
                             Hw=Hw, rhow=rhow,g=g, rho=rho,
                             H=H,pi=np.pi,fl=footloose) 
@@ -783,6 +783,7 @@ def f_bot(y,geom,mats):
 
 def test_filename(filename):
     if path.exists(filename):
+        print('  ')
         print('The output filename has already been used. \n'\
               'To be safe, rename this file if you want to re-run.')
         val = input("Type YES to continue.... ")

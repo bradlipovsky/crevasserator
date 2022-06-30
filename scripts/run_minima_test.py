@@ -14,7 +14,7 @@ def main():
     print ('  ')
 
     # Output filename
-    filename='output/swell-sifs-one-Lc.pkl'
+    filename='../output/swell-sifs-one-Lc.pkl'
     c.test_filename(filename)
     
     # Geometry: domain width, domain height, 
