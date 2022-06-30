@@ -1,4 +1,5 @@
 from dolfin import *
+from os import path
 from mshr import *
 import numpy as np
 import multiprocessing
@@ -8,9 +9,19 @@ import scipy.integrate as integrate
 import scipy.special as special
 
 def elasticity_solutions(case='full-minus-prestress', 
-                         geometry = {'W':20000,'H':200,'Lc':500, 'Wc':1, 'Hc': 5, 'fl':0, 
-                                     'swell_wavelength':1000.0}, 
-                         materials = {'E':1e10, 'nu':0.3, 'rho':910, 'rhow':1024, 'g':9.81},
+                         geometry = {'W':60000,
+                                     'H':300,
+                                     'Lc':15, 
+                                     'Wc':1, 
+                                     'Hc': 5, 
+                                     'fl':0, 
+                                     'swell_wavelength':1340.0,
+                                     'ice_wavelength':4610.0}, 
+                         materials = {'E':1e10,
+                                      'nu':0.3, 
+                                      'rho':910, 
+                                      'rhow':1024, 
+                                      'g':9.81},
                          crevasse_location="surface",
                          swell_amplitude=0.0,
                          swell_phase=0.0,
@@ -18,13 +29,15 @@ def elasticity_solutions(case='full-minus-prestress',
                          refinement=1,
                          verbose=False):
     """
-    elasticity_solutions solves the equations of plane strain elasticity with boundary conditions
-    that are representative of an ice shelf. 
+    elasticity_solutions solves the equations of plane strain elasticity 
+    with boundary conditions that are representative of an ice shelf. 
 
-    :param case: gives numerous simplifications of the most realistic boundary conditions. For many
-    of the cases, analytical solutions are available (and are displayed if verbose=True).
+    :param case: gives numerous simplifications of the most realistic 
+    boundary conditions. For many of the cases, analytical solutions 
+    are available (and are displayed if verbose=True).
     
-    :param footloose: is the length of a submarine ice foot (the front of the foot is at zero)
+    :param footloose: is the length of a submarine ice foot (the front of 
+    the foot is at zero)
     
     :return: the solution U and the mesh
     """ 
@@ -38,7 +51,8 @@ def elasticity_solutions(case='full-minus-prestress',
     crevasse_tip_num_pts = 50 # 50 pts @ Nominal 1m length => 2cm spacing
     
     if verbose:
-        print('Crevasse points wall/tip: %d/%d'%(crevasse_num_pts,crevasse_tip_num_pts))
+        print(f'Crevasse points wall/tip: '\
+                f'{crevasse_num_pts}/{crevasse_tip_num_pts}')
     
     # Type fewer characters later...
     W = geometry['W']
@@ -52,6 +66,8 @@ def elasticity_solutions(case='full-minus-prestress',
     rhow=materials['rhow']
     g=materials['g']
     swell_wavelength=geometry['swell_wavelength']
+    ice_wavelength=geometry['ice_wavelength']
+
     if 'fl' in geometry.keys():
         footloose=geometry['fl']
     else:
@@ -61,7 +77,8 @@ def elasticity_solutions(case='full-minus-prestress',
         print('Running %s model:'%case)
     
     D, flexural_gravity_wavelength, lam = fgl(materials,geometry)
-    crevasse_refinement=length_of_refinement_region*flexural_gravity_wavelength
+    crevasse_refinement=length_of_refinement_region* \
+                flexural_gravity_wavelength
     
     mu = E/2./(1+nu)
     K = E/(3*(1-2*nu))
@@ -130,24 +147,29 @@ def elasticity_solutions(case='full-minus-prestress',
         print('     Generating Mesh')
         
     
-    ice = build_ice(H,Hw,swell_amplitude,ice_front_dy,waterline_dy,W,footloose)
-    crevasse = build_crevasse(geometry,crevasse_location,crevasse_num_pts,crevasse_tip_num_pts)
+    ice = build_ice(H,Hw,swell_amplitude,ice_front_dy,
+                    waterline_dy,W,footloose)
+    crevasse = build_crevasse(geometry,crevasse_location,
+                    crevasse_num_pts,crevasse_tip_num_pts)
     
 
     if (swell_amplitude > 0.0) and (case != 'full-minus-prestress'):
-        print ('SWELL IS ONLY IMPLEMENTED IN THE full-minus-prestress CASE.')
+        print('not implemented')
+        exit()
         
     
     mesh = generate_mesh ( ice - crevasse, 100)
 
     # Refine the mesh.  
-    # From: https://fenicsproject.discourse.group/t/prescribing-spatially-varying-cell-sizes/527
+    # From: https://fenicsproject.discourse.group\
+    #   /t/prescribing-spatially-varying-cell-sizes/527
     d = mesh.topology().dim()
 
     # Refine in a region of +/- 2*FGL from the crevasse. 
     # Also refine near the ice front.
-    refined_region = CompiledSubDomain("((x[0] < Lc + dx) & (x[0] > Lc - dx))\
-                        | (x[0] < dx)",H=H,Lc=Lc,dx=crevasse_refinement)
+    refined_region = CompiledSubDomain("((x[0] < Lc + dx)"\
+                        "& (x[0] > Lc - dx))"\
+                        "| (x[0] < dx)",H=H,Lc=Lc,dx=crevasse_refinement)
     
     for i in range(number_of_refinement_iterations):
         r_markers = MeshFunction("bool", mesh, d, False)
@@ -178,35 +200,46 @@ def elasticity_solutions(case='full-minus-prestress',
         
     if case == 'full-minus-prestress':
         
-        if (swell_forcing == 'everything')  or (swell_forcing == 'front only'):
+        if (swell_forcing == 'everything') \
+            or (swell_forcing == 'front only'):
+
             if verbose:
-                print('     Applying swell boundary condition on the ice front')
-            P_fro  = Expression(("(x[1]<Hw) ? rhow*g*(Hw + A*sin(2*pi*x[0]/L + P) - x[1]) : 0","0"), 
+                print('     Applying swell bc on the ice front')
+            P_fro  = Expression(("(x[1]<Hw) ? rhow*g*(Hw "\
+                            "+ A*sin(2*pi*x[0]/L + P) - x[1]) : 0","0"), 
                             degree=1,
                             Hw=Hw, rhow=rhow,g=g,
-                            A=swell_amplitude,L=swell_wavelength,P=swell_phase,pi=np.pi)
+                            A=swell_amplitude,
+                            L=swell_wavelength,P=swell_phase,pi=np.pi)
         else:
             P_fro  = Expression(("(x[1]<Hw) ? rhow*g*(Hw - x[1]) : 0","0"), 
                             degree=1,
                             Hw=Hw, rhow=rhow,g=g)
             
-        if (swell_forcing == 'everything') or (swell_forcing == 'bottom only'):
+        if (swell_forcing == 'everything') \
+                    or (swell_forcing == 'bottom only'):
+
             if verbose:
-                print('     Applying swell boundary condition on the ice bottom')
-            P_bot  = Expression(("0","(x[1]<Hw) ? rhow*g*(Hw + A*sin(2*pi*x[0]/L + P) - x[1]) : 0"), 
+                print('     Applying swell bc on the ice bottom')
+            P_bot  = Expression(("0","(x[1]<Hw) ? rhow*g*(Hw + "\
+                            "A*sin(2*pi*x[0]/L + P) - x[1]) : 0"), 
                             degree=1,
                             Hw=Hw, rhow=rhow,g=g,
-                            A=swell_amplitude,L=swell_wavelength,P=swell_phase,pi=np.pi)
+                            A=swell_amplitude,
+                            L=ice_wavelength,P=swell_phase,pi=np.pi)
         else:
             P_bot  = Expression(("0","(x[1]<Hw) ? rhow*g*(Hw - x[1]) : 0"), 
                             degree=1,
                             Hw=Hw, rhow=rhow,g=g)
 
-        P0_fro = Expression(("(x[0]>=fl) ? rho*g*(H-x[1]) : rho*g*(Hw-x[1])","0"), degree=1,
+        P0_fro = Expression(("(x[0]>=fl) ? rho*g*(H-x[1]) :"\ 
+                             "rho*g*(Hw-x[1])","0"), degree=1,
                             Hw=Hw, rhow=rhow,g=g, rho=rho, H=H,fl=footloose)
         
-        P0_bot = Expression(("0","(x[0]>=fl) ? rho*g*(H-x[1]) : rho*g*(Hw-x[1])"), degree=1,
-                            Hw=Hw, rhow=rhow,g=g, rho=rho, H=H,pi=np.pi,fl=footloose) 
+        P0_bot = Expression(("0","(x[0]>=fl) ? rho*g*(H-x[1]) :"\
+                            "rho*g*(Hw-x[1])"), degree=1,
+                            Hw=Hw, rhow=rhow,g=g, rho=rho,
+                            H=H,pi=np.pi,fl=footloose) 
             
 #         P0_fro = Expression(("rho*g*(H-x[1]) ","0"), degree=1,
 #                             Hw=Hw, rhow=rhow,g=g, rho=rho, H=H) 
@@ -384,7 +417,8 @@ def elasticity_solutions(case='full-minus-prestress',
         print(' ')
     return U,mesh
 
-def build_crevasse(geom,crevasse_location,crevasse_num_pts,crevasse_tip_num_pts):
+def build_crevasse(geom,crevasse_location,crevasse_num_pts,
+                    crevasse_tip_num_pts):
     Lc = geom['Lc']
     Wc = geom['Wc']
     Hc = geom['Hc']
@@ -475,15 +509,25 @@ def sigma(v,lmbda,mu):
     dim = v.geometric_dimension()
     return 2.0*mu*eps(v) + lmbda*tr(eps(v))*Identity(dim)
 
+
+
+
+
 def sif(geom,mats,verbose=False,loc='surface',swell_amplitude=0.0,
         swell_phase=0.0,swell_forcing='everything',refinement=3):
-    
-    U,mesh = elasticity_solutions(geometry=geom,materials=mats, crevasse_location=loc,
-                                 swell_amplitude=swell_amplitude,swell_phase=swell_phase,
-                                 swell_forcing=swell_forcing,
-                                 refinement=refinement,verbose=verbose)
+    '''
+    This function calculates SIFs from an elasticity solution.
+    '''    
 
 
+    # First, calculate the elasticity solution.
+    U,mesh = elasticity_solutions(geometry=geom,
+                materials=mats, crevasse_location=loc,
+                swell_amplitude=swell_amplitude,swell_phase=swell_phase,
+                swell_forcing=swell_forcing,
+                refinement=refinement,verbose=verbose)
+
+    # Next, calculate the SIFs.
     Rc = 0.375
     if loc=='surface':
         x1 = geom['Lc']-geom['Wc']/2
@@ -534,22 +578,33 @@ def sif(geom,mats,verbose=False,loc='surface',swell_amplitude=0.0,
 
 def sif_wrapper(swell_phase,this_run,crevasse_location,geom,mats,
                     swell_forcing,verbose=False):
-    if verbose:
-        print('     Calling sif_wrapper() with phase = %f rad'%swell_phase)
+    '''
+    This function is a helper function that puts the function sif() 
+    into a form that can be called in the objective function called 
+    by fminbound within the function find_extreme_phase.
+    '''
+
     g = geom
     g['Lc'] = crevasse_location
     these_Ks = sif(g,mats,verbose=False,loc=this_run, swell_amplitude=1.0,
                 swell_phase=swell_phase,swell_forcing=swell_forcing)
     if verbose:
-        print('     Result from sif_wrapper():  KI = %f'%these_Ks[0]);
+        print(f"     KI(p={swell_phase:.2f},L={geom['Lc']:.2f})"\
+                f" = {these_Ks[0]:.2f}");
     return these_Ks
 
-def find_extreme_phase(this_run,mode,geom,mats,verbose,swell_forcing,extrema,L):
+
+
+def find_extreme_phase(this_run,mode,geom,
+                        mats,verbose,
+                        swell_forcing,extrema,L):
+    '''
+    Calculates the wave phase at which the extremal SIF is achieved.  This
+    function is run using multiprocessing in the function call_pmap, below.
+    '''
+
     if verbose:
-        if extrema=='max':
-            print('Finding Phase with MAX K:');
-        elif extrema=='min':
-            print('Finding Phase with MIN K:');
+        print(f'SEARCHING for {extrema} K{mode} at L={L:.2f}...');
     if mode=='I':
         obj_fun = lambda phase : sif_wrapper(phase,this_run,L,geom,mats,
                                              swell_forcing,verbose)[0]
@@ -561,21 +616,34 @@ def find_extreme_phase(this_run,mode,geom,mats,verbose,swell_forcing,extrema,L):
         # Max of f == the min of -f
         MINUS_ONE = -1
         wrapwrapwrap = lambda x : MINUS_ONE*obj_fun(x)
-        extreme_phase,extreme_KI,trash,trash = fminbound(wrapwrapwrap,0,2*np.pi,
-                                                         full_output=True,xtol=1e-3)
+        extreme_phase,extreme_KI,trash,trash = fminbound(wrapwrapwrap,
+                                         0,2*np.pi,
+                                         full_output=True,xtol=1e-3)
         extreme_KI=MINUS_ONE*extreme_KI
         
     elif extrema=='min':
         # "Bounded minimization for scalar functions."
         extreme_phase,extreme_KI,trash,trash = fminbound(obj_fun,0,2*np.pi,
                                                  full_output=True,xtol=1e-3)
+    if verbose:
+        print(f'FOUND {extrema} K{mode} at L={L:.2f}.');
+
     return extreme_phase, extreme_KI
 
-def call_pmap(geom,mats,this_run,mode,crevasse_locations,nproc=96,verbose=False,
-        swell_forcing='everything',extrema='max'):
+def call_pmap(geom,mats,this_run,mode,
+            crevasse_locations,nproc=96,verbose=False,
+            swell_forcing='everything',extrema='max'):
+    '''
+    This is the function you want to call if you want to run a parameter
+    space study in parallel. call_pmap is really just a wrapper that 
+    provides a nicer interface to the function find_extreme_phase through
+    partial and pool.map.
+    '''
+
     pool = multiprocessing.Pool(processes=nproc)
     
-    find_extreme_phase_partial = partial (find_extreme_phase,this_run,mode,geom,mats,
+    find_extreme_phase_partial = partial (find_extreme_phase,
+                                        this_run,mode,geom,mats,
                                         verbose,swell_forcing,extrema)
     if verbose:
         print('Created pool. Calling map.')
@@ -588,18 +656,30 @@ def call_pmap(geom,mats,this_run,mode,crevasse_locations,nproc=96,verbose=False,
     return result_list
 
 def fgl(mats,geom):
+    '''
+    Calculates the flexural gravity wavelength and the flexural rigidity.
+    '''
+
     D = mats['E']/(1-mats['nu']**2) * geom['H']**3 / 12
-    flexural_gravity_wavelength = 2*np.pi*(D/(mats['rhow']*mats['g']))**(1/4)
+    flexural_gravity_wavelength = 2*np.pi*\
+        (D/(mats['rhow']*mats['g']))**(1/4)
     lam = (4*D/(mats['rhow']*mats['g']))**(1/4)
     return D, flexural_gravity_wavelength, lam
 
+
+
 def analytical_KI(geom,mats,swell_height=0):
-    
+    '''
+    Calculates the van der Veen analytical solutions for KI
+    '''
+        
     f_new = lambda x: f(x,geom,mats)
     dK = integrate.quad(f_new, 0, geom['Hc'])
-    K_crack_face_loading_surface = 2*mats['rho']*mats['g']/np.sqrt(np.pi*geom['Hc']) * dK[0]
+    K_crack_face_loading_surface = 2*mats['rho']*\
+            mats['g']/np.sqrt(np.pi*geom['Hc']) * dK[0]
 
-    sig0 = mats['rho']*mats['g']*(geom['H']+swell_height) / 2 *(1-mats['rho']/mats['rhow'])
+    sig0 = mats['rho']*mats['g']*(geom['H']+swell_height) / \
+            2 *(1-mats['rho']/mats['rhow'])
     KI_analytical = 1.12 * sig0 * sqrt(np.pi * geom['Hc'])
     KI_analytical += K_crack_face_loading_surface
     
@@ -610,8 +690,14 @@ def analytical_KI(geom,mats,swell_height=0):
     
     return KI_analytical, KI_analytical_bottom
 
+
+
 def analytical_KI_bending(geom,mats,Lcs):
-    
+    '''
+    Calculates analytical solutions that combine the van der Veen 
+    solution with bending stresses.
+    ''' 
+ 
     D, flexural_gravity_wavelength,lam = fgl(mats,geom)
     r = mats['rho']/mats['rhow']
     m0 = mats['rho']*mats['g']*geom['H']**3 / 12 * (3*r - 2*r**2 - 1)
@@ -630,6 +716,10 @@ def analytical_KI_bending(geom,mats,Lcs):
     return KI_analytical_bending,KI_analytical_bending_bottom
 
 def analytical_KI_footloose(geom,mats,Lcs):
+    '''
+    Calculates analytical solutions that combine the van der Veen 
+    solution with bending stresses from footloose mechanism.
+    ''' 
     
     D, flexural_gravity_wavelength,lam = fgl(mats,geom)
     r = mats['rho']/mats['rhow']
@@ -644,39 +734,58 @@ def analytical_KI_footloose(geom,mats,Lcs):
 
     M_flex = m0 * np.exp(-Lcs/lam)*(np.cos(Lcs/lam) + np.sin(Lcs/lam))
     sig_flex = M_flex * geom['H']/2 / II 
-    KI_analytical_bending =  + 1.12 * (sig_flex) * np.sqrt(np.pi * geom['Hc'])
-    KI_analytical_bending_bottom =  - 1.12 * (sig_flex) * np.sqrt(np.pi * geom['Hc'])
+    KI_analytical_bending =  + 1.12 * (sig_flex) \
+            * np.sqrt(np.pi * geom['Hc'])
+    KI_analytical_bending_bottom =  - 1.12 * (sig_flex) \
+            * np.sqrt(np.pi * geom['Hc'])
     
     KI_analytical_bending = KI_analytical/1e6 + KI_analytical_bending/1e6\
                 + 1.12 * (sig_load) * np.sqrt(np.pi * geom['Hc']) / 1e6 \
             
 
-    KI_analytical_bending_bottom = KI_analytical_bottom/1e6 + KI_analytical_bending_bottom/1e6\
-                              - 1.12 * (sig_load) * np.sqrt(np.pi * geom['Hc']) / 1e6
+    KI_analytical_bending_bottom = KI_analytical_bottom/1e6 \
+                    + KI_analytical_bending_bottom/1e6\
+                    - 1.12 * (sig_load) * np.sqrt(np.pi * geom['Hc']) / 1e6
     
     return KI_analytical_bending,KI_analytical_bending_bottom
 
 
 def f(y,geom,mats):
-    # Integral kernel for Surface Crevasses
+    '''
+    van der Veen Integral kernel for Surface Crevasses
+    '''
     gamma = y/geom['Hc']
     lambd = geom['Hc']/geom['H']
     val =  3.52*(1-gamma)/(1-lambd)**(3/2)
     val += - (4.35-5.28*gamma)/(1-lambd)**(1/2)
-    val += ( (1.30 - 0.3*gamma**(3/2)) / (1-gamma**2)**(1/2) + 0.83 - 1.76*gamma) \
+    val += ( (1.30 - 0.3*gamma**(3/2)) \
+            / (1-gamma**2)**(1/2) + 0.83 - 1.76*gamma) \
             * (1 - (1-gamma)*lambd)
     return val
 
 
 def f_bot(y,geom,mats):
-    # Integral kernel for bottom crevasses
+    '''
+    van der Veen integral kernel for bottom crevasses
+    '''
     Hw = mats['rho']/mats['rhow'] * geom['H']
-    sig = lambda y: mats['rhow']*mats['g']*(Hw-y) - mats['rho']*mats['g']*(geom['H']-y)
+    sig = lambda y: mats['rhow']*mats['g']*(Hw-y)\
+             - mats['rho']*mats['g']*(geom['H']-y)
     gamma = y/geom['Hc']
     lambd = geom['Hc']/geom['H']
     kernel =  3.52*(1-gamma)/(1-lambd)**(3/2)
     kernel += - (4.35-5.28*gamma)/(1-lambd)**(1/2)
-    kernel += ( (1.30 - 0.3*gamma**(3/2)) / (1-gamma**2)**(1/2) + 0.83 - 1.76*gamma) \
+    kernel += ( (1.30 - 0.3*gamma**(3/2)) / \
+            (1-gamma**2)**(1/2) + 0.83 - 1.76*gamma) \
                 * (1 - (1-gamma)*lambd)
     val = sig(y) * kernel
     return val
+
+def test_filename(filename):
+    if path.exists(filename):
+        print('The output filename has already been used. \n'\
+              'To be safe, rename this file if you want to re-run.')
+        val = input("Type YES to continue.... ")
+        if val!='YES':
+            exit()
+        print('  ')

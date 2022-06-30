@@ -6,33 +6,34 @@ This script tests the function find_extreme_phase
 from time import perf_counter
 import numpy as np
 import pickle
-from os import path
 import crevasse as c # main module for this project
 from importlib import reload
 reload(c)
 
 def main():
+    print ('  ')
+
     # Output filename
     filename='output/swell-sifs-one-Lc.pkl'
+    c.test_filename(filename)
     
     # Geometry: domain width, domain height, 
     #  crevasse location, crevasse width, crevasse height
-    geom = {'W':60000,'H':300,'Lc':15, 'Wc':1, 'Hc': 5}
+    geom = {'W':60000,
+        'H':300,
+        'Lc':15,
+        'Wc':1,
+        'Hc': 5,
+        'fl':0,
+        'swell_wavelength':1340.0,
+        'ice_wavelength':4610.0}
 
     # Materials: Youngs modulus, poisson ratio, 
     #  ice density, water density, gravity
     mats = {'E':1e10, 'nu':0.3, 'rho':910, 'rhow':1024, 'g':9.81}
 
     D,flexural_gravity_wavelength, lam= c.fgl(mats,geom)
-
     Lc = 1.1*flexural_gravity_wavelength
-
-    if path.exists(filename):
-        print('The output filename has already been used. \n\
-                To be safe, rename this file if you want to re-run.')
-        val = input("Type YES to continue.")
-        if val!='YES':
-            return
 
     output={}
     min_or_max = 'max'
