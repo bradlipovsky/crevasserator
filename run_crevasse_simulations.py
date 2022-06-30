@@ -15,7 +15,7 @@ reload(c)
 
 def main():
     # Output filename
-    filename='../output/swell-sifs.pkl'
+    filename='output/swell-sifs.pkl'
     c.test_filename(filename)
  
     # Geometry: domain width, domain height, 
@@ -26,7 +26,7 @@ def main():
         'Wc':1,
         'Hc': 5,
         'fl':0,
-        'swell_wavelength':1340.0,
+        'swell_wavelength':1340,
         'ice_wavelength':4610.0}
 
     # Materials: Youngs modulus, poisson ratio, 
@@ -35,12 +35,20 @@ def main():
 
     D,flexural_gravity_wavelength, lam= c.fgl(mats,geom)
 
-    number_of_locations = 10
-    Lcs_swell = np.linspace(20,2*flexural_gravity_wavelength,
-                           number_of_locations)
+    min_feature_size = 1340
+    max_crevasse_range = 2*flexural_gravity_wavelength
+    min_crevasse_range = 20
+    number_of_locations = round(8*(max_crevasse_range-min_crevasse_range)\
+                            /min_feature_size)
+    Lcs_swell = np.linspace(min_crevasse_range,
+                            max_crevasse_range,
+                            number_of_locations)
 
+    t0_start = perf_counter() 
     output={}
     number_of_processors = min(number_of_locations,48)
+    print(f'Calculating extreme values at {number_of_locations} crevasse'
+            'locations.\n\n')
     for min_or_max in ('min','max'):
         for mode in ('I','II'):
             for this_run in ('bottom','surface'):
@@ -60,7 +68,9 @@ def main():
                 t1_stop = perf_counter()
 
                 print("Elapsed time in "
-                        "outer loop: %f s."%(t1_stop-t1_start))
+                        "last loop: %f s."%(t1_stop-t1_start))
+
+    print(f"Total elapsed time: {t1_stop-t0_start}")
 
     with open(filename,'wb') as f:
         pickle.dump(output, f)
