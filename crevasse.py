@@ -15,8 +15,8 @@ def elasticity_solutions(case='full-minus-prestress',
                                      'Wc':1, 
                                      'Hc': 5, 
                                      'fl':0, 
-                                     'swell_wavelength':1340.0,
-                                     'ice_wavelength':4610.0}, 
+                                     'swell_wavelength':156,
+                                     'ice_wavelength':3000}, 
                          materials = {'E':1e10,
                                       'nu':0.3, 
                                       'rho':910, 
@@ -24,7 +24,7 @@ def elasticity_solutions(case='full-minus-prestress',
                                       'g':9.81},
                          crevasse_location="surface",
                          swell_amplitude=0.0,
-                         swell_transmission_coeff=0.48,
+                         swell_transmission_coeff=0.14,
                          swell_phase=0.0,
                          swell_forcing="everything",
                          refinement=1,
@@ -45,7 +45,7 @@ def elasticity_solutions(case='full-minus-prestress',
         
     # Meshing parameters
     number_of_refinement_iterations = refinement
-    length_of_refinement_region = 1e6
+    length_of_refinement_region = 1e6 # set to a huge number --> refine everywhere
     waterline_dy = 2
     ice_front_dy = 4
     crevasse_num_pts = 250 # 250 pts @ Nominal 5m length => 2cm spacing

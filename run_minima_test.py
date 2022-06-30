@@ -14,7 +14,7 @@ def main():
     print ('  ')
 
     # Output filename
-    filename='output/swell-sifs-one-Lc.pkl'
+    filename='output/swell-sifs-one-Lc-v2.pkl'
     c.test_filename(filename)
     
     # Geometry: domain width, domain height, 
@@ -25,15 +25,15 @@ def main():
         'Wc':1,
         'Hc': 5,
         'fl':0,
-        'swell_wavelength':1340.0,
-        'ice_wavelength':4610.0}
+        'swell_wavelength':156.0,
+        'ice_wavelength':3000.0}
 
     # Materials: Youngs modulus, poisson ratio, 
     #  ice density, water density, gravity
     mats = {'E':1e10, 'nu':0.3, 'rho':910, 'rhow':1024, 'g':9.81}
 
     D,flexural_gravity_wavelength, lam= c.fgl(mats,geom)
-    Lc = 1.1*flexural_gravity_wavelength
+    Lc = 12864.336243112473
 
     output={}
     min_or_max = 'max'

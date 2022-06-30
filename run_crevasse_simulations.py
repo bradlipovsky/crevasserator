@@ -15,7 +15,7 @@ reload(c)
 
 def main():
     # Output filename
-    filename='output/swell-sifs.pkl'
+    filename='output/sifs-10s-swell.pkl'
     c.test_filename(filename)
  
     # Geometry: domain width, domain height, 
@@ -26,8 +26,8 @@ def main():
         'Wc':1,
         'Hc': 5,
         'fl':0,
-        'swell_wavelength':1340,
-        'ice_wavelength':4610.0}
+        'swell_wavelength':156,
+        'ice_wavelength':3000.0}
 
     # Materials: Youngs modulus, poisson ratio, 
     #  ice density, water density, gravity
@@ -35,7 +35,7 @@ def main():
 
     D,flexural_gravity_wavelength, lam= c.fgl(mats,geom)
 
-    min_feature_size = 1340
+    min_feature_size = 1300
     max_crevasse_range = 2*flexural_gravity_wavelength
     min_crevasse_range = 20
     number_of_locations = round(8*(max_crevasse_range-min_crevasse_range)\
@@ -46,7 +46,7 @@ def main():
 
     t0_start = perf_counter() 
     output={}
-    number_of_processors = min(number_of_locations,48)
+    number_of_processors = min(number_of_locations,96)
     print(f'Calculating extreme values at {number_of_locations} crevasse'
             'locations.\n\n')
     for min_or_max in ('min','max'):
