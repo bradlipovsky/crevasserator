@@ -1,7 +1,7 @@
 [![DOI](https://zenodo.org/badge/399821666.svg)](https://zenodo.org/badge/latestdoi/399821666)
 
 ![monster truck jumping over a crevasse](crevasserator.png)
-logo made by [Seth Olinger](http://setholinger.github.io)
+logo made by [Steph Olinger](http://stepholinger.github.io)
 
 # crevasserator
 finite element method (FEM) codes to calculate glacier crevasse stress intensity factors
@@ -17,7 +17,8 @@ The notebooks contain:
 ## Install and Run
 
 1. Clone this repository.
-2. Run a [Docker](https://www.docker.com/get-started/) container with [FEniCS](https://fenicsproject.org/) (the FEM backend). Details follow.
+2. Run a [Docker](https://www.docker.com/get-started/) container with [FEniCS](https://fenicsproject.org/) (the FEM backend).
+3. Install a few things in the container.
 
 ### Jupyter Notebooks
 The easiest option to get started is to use Jupyter. The following docker command will launch a Jupyter Notebook server where you can run the notebooks.  *For the following docker run commands, run these from the directory that contains the cloned repo.*
@@ -36,4 +37,10 @@ After creating the container, one useful workflow is to start screen (to ensure 
 screen
 docker start crevasserator_it
 docker attach crevasserator_it
+```
+Finally, you'll need to install some things in the container:
+```
+sudo apt-get update -y
+sudo apt-get install -y python-gmsh
+pip install --user gmsh h5py meshio
 ```
