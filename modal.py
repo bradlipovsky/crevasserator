@@ -6,15 +6,12 @@ import numpy as np
 from time import perf_counter
 import gmsh # ellpsoid with holes
 import meshio
-from dolfin import *
-import dolfin
-
 
 def modal_elasticity_solution(verbose=0,writevtk = True):
     t0 = perf_counter()
 
     # All the parameters are stored in the dictionary p
-    p = {
+    m = {
         'lmbda': 8e9, 
         'mu' : 3e9,
         'rho' : 910,
@@ -29,24 +26,27 @@ def modal_elasticity_solution(verbose=0,writevtk = True):
         'k' : 2*np.pi/200,
         'A' : 1,
         'max_element_size' : 40,
+        'min_element_size' : 0.02,
         'Hc':0,
         'omega':0,
         'xf':0
     }
-    p['xf'] = p['Wx']/4
-    p['Hc'] = p['Hw'] - (p['rho']/p['rhof']) * p['Hi']
-    p['omega'] = np.sqrt(p['gravity']*p['k']*np.tanh(p['k']*p['Hw']))
+    m['xf'] = m['Wx']/4
+    m['Hc'] = m['Hw'] - (m['rho']/m['rhof']) * m['Hi']
+    m['omega'] = np.sqrt(m['gravity']*m['k']*np.tanh(m['k']*m['Hw']))
 
     if verbose > 0:
-        print(f'The swell phase velocity is {p["omega"]/p["k"]} m/s')
-        print(f'The swell wave length is {2*np.pi/p["k"]} m')
-        print(f'The swell wave period is {2*np.pi/p["omega"]} s')
+        print(f'The swell phase velocity is {m["omega"]/m["k"]} m/s')
+        print(f'The swell wave length is {2*np.pi/m["k"]} m')
+        print(f'The swell wave period is {2*np.pi/m["omega"]} s')
 
     '''
     Make the mesh
     '''
-    create_mesh(p)
-    exit()    
+    create_mesh(m)
+
+    from dolfin import Mesh, MeshValueCollection, XDMFFile, FiniteElement, Measure, VectorElement, FunctionSpace, TrialFunction, TestFunction, Constant, Expression, split, DirichletBC, sym, grad, Identity, inner, FacetNormal, tr, assemble, solve, Function, near, File
+    from dolfin.cpp.mesh import MeshFunctionSizet
 
     mesh = Mesh()
     with XDMFFile("mesh.xdmf") as infile:
@@ -55,12 +55,12 @@ def modal_elasticity_solution(verbose=0,writevtk = True):
     mvc = MeshValueCollection("size_t", mesh, 2)
     with XDMFFile("mesh.xdmf") as infile:
         infile.read(mvc)
-    mf = cpp.mesh.MeshFunctionSizet(mesh, mvc)
+    mf = MeshFunctionSizet(mesh, mvc)
 
     mvc2 = MeshValueCollection("size_t", mesh, 1)
     with XDMFFile("facet_mesh.xdmf") as infile:
         infile.read(mvc2)
-    mf2 = cpp.mesh.MeshFunctionSizet(mesh, mvc2)
+    mf2 = MeshFunctionSizet(mesh, mvc2)
 
 
     '''
@@ -91,13 +91,13 @@ def modal_elasticity_solution(verbose=0,writevtk = True):
     (p, u) = split(TRF)
     (q, v) = split(TTF)
 
-
     '''
     Dirichlet boundary conditions
     '''
     u0 = Constant(0.0)
     wavebc= Expression("A*omega/k*cosh(k*x[1])/sinh(k*H)",
-            A=A,g=gravity,omega=omega,k=k,H=Hw,degree=2)
+            A=m['A'],g=m['gravity'],omega=m['omega'],
+            k=m['k'],H=m['Hw'],degree=2)
 
     zero = Constant(0.0)
     zero_2d = Constant((0.0, 0.0))
@@ -105,9 +105,9 @@ def modal_elasticity_solution(verbose=0,writevtk = True):
     def left_boundary(x):
         return near(x[0],0.0) 
     def right_ice_boundary(x):
-        return near(x[0],Wx) and (x[1] > Hc)
+        return near(x[0],m['Wx']) and (x[1] > m['Hc'])
     def right_water_boundary(x):
-        return near(x[0],Wx) and (x[1] < Hc) 
+        return near(x[0],m['Wx']) and (x[1] < m['Hc']) 
 
     bcs = [ DirichletBC(W.sub(0), wavebc, left_boundary), 
         DirichletBC(W.sub(1), zero_2d, right_ice_boundary),
@@ -116,20 +116,20 @@ def modal_elasticity_solution(verbose=0,writevtk = True):
     ''' 
     Define variational problem
     '''
-    sigma = 2.0*p['mu']*sym(grad(u)) \
-        + p['lmbda']*tr(sym(grad(u)))*Identity(u.geometric_dimension())
+    sigma = 2.0*m['mu']*sym(grad(u)) \
+        + m['lmbda']*tr(sym(grad(u)))*Identity(u.geometric_dimension())
     n = FacetNormal(mesh)
 
     #Fluid domain
-    a_f = inner(grad(p), grad(q))*dXf - p['omega']**2/p['gravity']*p*q*dst
+    a_f = inner(grad(p), grad(q))*dXf - m['omega']**2/m['gravity']*p*q*dst
     L_f = zero*q*dsb
 
     #Solid domain
-    a_s = (inner(sigma, grad(v)) - p['rho']*p['omega']**2*inner(u,v))*dXs
+    a_s = (inner(sigma, grad(v)) - m['rho']*m['omega']**2*inner(u,v))*dXs
 
     #Interface fluid-solid
-    a_i = (p['rho']*p['omega']**2 * inner(n('+'), u('+')) * q('+')\
-         - omega*rhof*p('+')*inner(n('+'), v('+')))*dSi
+    a_i = (m['rho']*m['omega']**2 * inner(n('+'), u('+')) * q('+')\
+         - m['omega']*m['rhof']*p('+')*inner(n('+'), v('+')))*dSi
 
     #Weak form
     a = a_f + a_s + a_i
@@ -228,7 +228,7 @@ def create_mesh(g):
     gmsh.model.mesh.field.setNumbers(distance_field, "EdgesList", [3])
     threshold_field = gmsh.model.mesh.field.add("Threshold")
     gmsh.model.mesh.field.setNumber(threshold_field, "IField", distance_field)
-    gmsh.model.mesh.field.setNumber(threshold_field, "LcMin", 0.02)
+    gmsh.model.mesh.field.setNumber(threshold_field, "LcMin", g['min_element_size'])
     gmsh.model.mesh.field.setNumber(threshold_field, "LcMax", g['max_element_size'])
     gmsh.model.mesh.field.setNumber(threshold_field, "DistMin", 0)
     gmsh.model.mesh.field.setNumber(threshold_field, "DistMax", 100)
@@ -243,7 +243,6 @@ def create_mesh(g):
     mesh_from_file = meshio.read("mesh.msh")
 
     triangle_mesh = convert_mesh(mesh_from_file, "triangle", prune_z=True)
-    print(triangle_mesh)
     meshio.write("mesh.xdmf", triangle_mesh)
 
     line_mesh = convert_mesh(mesh_from_file, "line", prune_z=True)
