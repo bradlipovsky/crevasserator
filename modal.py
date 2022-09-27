@@ -164,11 +164,12 @@ def modal_elasticity_solution(  x_crevasse=100,
     A.ident_zeros()
     s = Function(W)
     if verbose > 0:
-        print(f'\tSolve (x={x_crevasse}) starting at '+\
+        print(f'\tSolve (x={x_crevasse}) STARTING at '+\
               f't={(perf_counter()-t0):2.1f} s')
     solve(A, s.vector(), b)
     if verbose > 0:
-        print(f'\tSolve (x={x_crevasse}) finished at t={perf_counter()-t0} s')
+        print(f'\tSolve (x={x_crevasse}) FINISHED at '+\
+              f't={(perf_counter()-t0):2.1f} s')
 
     if writevtk:
         file = File("fgw.pvd")
