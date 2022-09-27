@@ -1,52 +1,38 @@
 import numpy as np
 from scipy.optimize import fminbound
 
-def sif(geom,mats,verbose=False,loc='surface',swell_amplitude=0.0,
-        swell_phase=0.0,swell_forcing='everything',refinement=3):
+def sif(U,Xc,Yc,Wc,prefactor,verbose=0,loc='surface',Rc = 0.375):
     '''
-    This function calculates SIFs from an elasticity solution.
+    sif(U,Wc,Xc,prefactor,verbose=False,loc='surface')
+
+    Calculates stress intensity factors (SIFs) from an input elasticity 
+    solution, U. The crevasse tip is located at (x,y)=(Xc,Yc) and has a 
+    width Wc. prefactor is equal to mu/(3-4*nu+1), with mu and nu being the 
+    shear modulus and Poisson ratio for ice, respectively.
+    
+    If 'loc'=='surface' then the crevasse is assumed to be above (Xc,Yc).
+    If 'loc'=='bottom' then the crevasse is assumed to be below (Xc,Yc).
+
+    Rc is the distance from the crack tip where the SIF is measured. This
+    point should be at least several elements away from the tip to make 
+    sure that the field is well-resovled.
+
+    Outputs both Mode I and Mode II sifs.
+
     '''    
 
-
-    # First, calculate the elasticity solution.
-    U,mesh = elasticity_solutions(geometry=geom,
-                materials=mats, crevasse_location=loc,
-                swell_amplitude=swell_amplitude,swell_phase=swell_phase,
-                swell_forcing=swell_forcing,
-                refinement=refinement,verbose=verbose)
-
-    # Next, calculate the SIFs.
-    Rc = 0.375
+    x1 = Xc-Wc/2
+    x2 = Xc+Wc/2
     if loc=='surface':
-        x1 = geom['Lc']-geom['Wc']/2
-        y1 = geom['H']-geom['Hc']+Rc
-        x2 = geom['Lc']+geom['Wc']/2
-        y2 = geom['H']-geom['Hc']+Rc
-        xtip = geom['Lc']
-        ytip = geom['H'] - geom['Hc']
+        y1 = Yc+Rc
+        y2 = Yc+Rc
     if loc=='bottom':
-        x1 = geom['Lc']-geom['Wc']/2
-        y1 = geom['Hc']-Rc
-        x2 = geom['Lc']+geom['Wc']/2
-        y2 = geom['Hc']-Rc
-        xtip = geom['Lc']
-        ytip = geom['Hc']
+        y1 = Yc-Rc
+        y2 = Yc-Rc
 
-    #
-    # Plot the location of the CTOD measurements
-    #
-
-#     fig,ax=plt.subplots(figsize=(10,5))
-#     plot(mesh)
-#     plt.plot(x1,y1,'ok')
-#     plt.plot(x2,y2,'ok')
-#     plt.plot(xtip,ytip,'or')
-#     plt.xlim([geom['Lc']-2*geom['Hc'],geom['Lc']+2*geom['Hc']])
-#     plt.ylim([geom['H']-geom['Hc']*4,geom['H']])
-#     plt.show()
-    
-    
-    r = sqrt( (x1-xtip)**2 + (y1 - ytip)**2)
+    if verbose > 1:
+        print(f'(x1,y1)=({x1},{y1})')
+        print(f'(x2,y2)=({x2},{y2})')
     u1 = U[0]((x1,y1))
     u2 = U[0]((x2,y2))
     v1 = U[1]((x1,y1))
@@ -54,94 +40,13 @@ def sif(geom,mats,verbose=False,loc='surface',swell_amplitude=0.0,
 
     du = u2 - u1
     dv = v2 - v1
-
-    mu = mats['E']/2./(1+mats['nu'])
-    lmbda = mats['E']*mats['nu']/(1+mats['nu'])/(1-2*mats['nu'])
     
-    KI = du*sqrt(2*pi / r) * mu/(3-4*mats['nu']+1)
-    KII = dv*sqrt(2*pi / r) * mu/(3-4*mats['nu']+1)
+    r = np.sqrt( (x1-Xc)**2 + (y1 - Yc)**2)
+    KI = du*np.sqrt(2*np.pi / r) * prefactor
+    KII = dv*np.sqrt(2*np.pi / r) * prefactor
     
     return (KI,KII)
 
-
-def sif_wrapper(swell_phase,this_run,crevasse_location,geom,mats,
-                    swell_forcing,verbose=False):
-    '''
-    This function is a helper function that puts the function sif() 
-    into a form that can be called in the objective function called 
-    by fminbound within the function find_extreme_phase.
-    '''
-
-    g = geom
-    g['Lc'] = crevasse_location
-    these_Ks = sif(g,mats,verbose=False,loc=this_run, swell_amplitude=1.0,
-                swell_phase=swell_phase,swell_forcing=swell_forcing)
-    if verbose:
-        print(f"     KI(p={swell_phase:.2f},L={geom['Lc']:.2f})"\
-                f" = {these_Ks[0]:.2f}");
-    return these_Ks
-
-
-
-def find_extreme_phase(this_run,mode,geom,
-                        mats,verbose,
-                        swell_forcing,extrema,L):
-    '''
-    Calculates the wave phase at which the extremal SIF is achieved.  This
-    function is run using multiprocessing in the function call_pmap, below.
-    '''
-
-    if verbose:
-        print(f'SEARCHING for {extrema} K{mode} at L={L:.2f}...');
-    if mode=='I':
-        obj_fun = lambda phase : sif_wrapper(phase,this_run,L,geom,mats,
-                                             swell_forcing,verbose)[0]
-    elif mode=='II':
-        obj_fun = lambda phase : sif_wrapper(phase,this_run,L,geom,mats,
-                                             swell_forcing,verbose)[1]
-
-    if extrema=='max':
-        # Max of f == the min of -f
-        MINUS_ONE = -1
-        wrapwrapwrap = lambda x : MINUS_ONE*obj_fun(x)
-        extreme_phase,extreme_KI,trash,trash = fminbound(wrapwrapwrap,
-                                         0,2*np.pi,
-                                         full_output=True,xtol=1e-3)
-        extreme_KI=MINUS_ONE*extreme_KI
-        
-    elif extrema=='min':
-        # "Bounded minimization for scalar functions."
-        extreme_phase,extreme_KI,trash,trash = fminbound(obj_fun,0,2*np.pi,
-                                                 full_output=True,xtol=1e-3)
-    if verbose:
-        print(f'FOUND {extrema} K{mode} at L={L:.2f}.');
-
-    return extreme_phase, extreme_KI
-
-def call_pmap(geom,mats,this_run,mode,
-            crevasse_locations,nproc=96,verbose=False,
-            swell_forcing='everything',extrema='max'):
-    '''
-    This is the function you want to call if you want to run a parameter
-    space study in parallel. call_pmap is really just a wrapper that 
-    provides a nicer interface to the function find_extreme_phase through
-    partial and pool.map.
-    '''
-
-    pool = multiprocessing.Pool(processes=nproc)
-    
-    find_extreme_phase_partial = partial (find_extreme_phase,
-                                        this_run,mode,geom,mats,
-                                        verbose,swell_forcing,extrema)
-    if verbose:
-        print('Created pool. Calling map.')
-        
-    result_list = pool.map(find_extreme_phase_partial, crevasse_locations)
-    
-    pool.close()
-    pool.join()
-    
-    return result_list
 
 def fgl(mats,geom):
     '''

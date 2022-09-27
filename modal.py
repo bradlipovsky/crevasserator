@@ -2,26 +2,37 @@
 Harmonic analysis of surface gravity waves impacting an elastic, 
 finite-thickness ice shelf with crevasses.
 '''
+from random import randint
 import numpy as np
 from time import perf_counter
 import gmsh # ellpsoid with holes
 import meshio
+from lefm import sif
 
-def modal_elasticity_solution(verbose=0,writevtk = True):
+def modal_elasticity_solution(  x_crevasse=100,
+                                verbose=0,
+                                writevtk = True,
+                                deletemesh = True):
+    '''
+    Carry out a modal elasticity solution. Returns SIFs.
+    '''
+    if verbose > 0:
+        print(f'Starting simulation with crevasse at {x_crevasse}.')
     t0 = perf_counter()
-
+    n = randint(0,1e6)
+ 
     # All the parameters are stored in the dictionary p
     m = {
         'lmbda': 8e9, 
         'mu' : 3e9,
         'rho' : 910,
         'rhof' : 1010,
-        'Wx' : 50000,
+        'Wx' : 100000,
         'Hw' : 500,
         'Hi' : 400,
         'h_crevasse' : 5,
         'w_crevasse' : 1,
-        'x_crevasse' : 100,
+        'x_crevasse' : x_crevasse,
         'gravity' : 9.8,
         'k' : 2*np.pi/200,
         'A' : 1,
@@ -35,33 +46,40 @@ def modal_elasticity_solution(verbose=0,writevtk = True):
     m['Hc'] = m['Hw'] - (m['rho']/m['rhof']) * m['Hi']
     m['omega'] = np.sqrt(m['gravity']*m['k']*np.tanh(m['k']*m['Hw']))
 
-    if verbose > 0:
-        print(f'The swell phase velocity is {m["omega"]/m["k"]} m/s')
-        print(f'The swell wave length is {2*np.pi/m["k"]} m')
-        print(f'The swell wave period is {2*np.pi/m["omega"]} s')
+    if verbose > 1:
+        print(f'\tThe swell phase velocity is {m["omega"]/m["k"]} m/s')
+        print(f'\tThe swell wave length is {2*np.pi/m["k"]} m')
+        print(f'\tThe swell wave period is {2*np.pi/m["omega"]} s')
 
     '''
     Make the mesh
     '''
-    create_mesh(m)
+    create_mesh(m,n)
 
     from dolfin import Mesh, MeshValueCollection, XDMFFile, FiniteElement, Measure, VectorElement, FunctionSpace, TrialFunction, TestFunction, Constant, Expression, split, DirichletBC, sym, grad, Identity, inner, FacetNormal, tr, assemble, solve, Function, near, File
     from dolfin.cpp.mesh import MeshFunctionSizet
 
     mesh = Mesh()
-    with XDMFFile("mesh.xdmf") as infile:
+    with XDMFFile(f"mesh_{n}.xdmf") as infile:
         infile.read(mesh)
 
     mvc = MeshValueCollection("size_t", mesh, 2)
-    with XDMFFile("mesh.xdmf") as infile:
+    with XDMFFile(f"mesh_{n}.xdmf") as infile:
         infile.read(mvc)
     mf = MeshFunctionSizet(mesh, mvc)
 
     mvc2 = MeshValueCollection("size_t", mesh, 1)
-    with XDMFFile("facet_mesh.xdmf") as infile:
+    with XDMFFile(f"facet_mesh_{n}.xdmf") as infile:
         infile.read(mvc2)
     mf2 = MeshFunctionSizet(mesh, mvc2)
 
+    if deletemesh:
+        from os import remove
+        remove(f"mesh_{n}.xdmf")
+        remove(f"facet_mesh_{n}.xdmf")
+        remove(f"mesh_{n}.msh")
+        remove(f"mesh_{n}.h5")
+        remove(f"facet_mesh_{n}.h5")
 
     '''
     Mark domains/boundaries
@@ -145,15 +163,32 @@ def modal_elasticity_solution(verbose=0,writevtk = True):
     for bc in bcs: bc.apply(A, b)
     A.ident_zeros()
     s = Function(W)
-    print(f'Solve starting at t={perf_counter()-t0} s')
+    if verbose > 0:
+        print(f'\tSolve (x={x_crevasse}) starting at '+\
+              f't={(perf_counter()-t0):2.1f} s')
     solve(A, s.vector(), b)
-    pp,uu = split(s)
-    print(f'Solve finished at t={perf_counter()-t0} s')
+    if verbose > 0:
+        print(f'\tSolve (x={x_crevasse}) finished at t={perf_counter()-t0} s')
 
     if writevtk:
         file = File("fgw.pvd")
         file << s
+    
+    '''
+    Calculate SIF
+    '''
+    Xc = m['xf']+m['x_crevasse']
+    Yc = m['Hi']+m['Hc']-m['h_crevasse']
+    Wc = m['w_crevasse']
+    nu = m['lmbda']/2/(m['lmbda']+m['mu'])
+    factor = m['mu']/(3-4*nu+1)
+    pp,uu = split(s)
+    [KI,KII] = sif(uu,Xc,Yc,Wc,factor,verbose=verbose)
 
+    if verbose > 0:
+        print(f'\tEvaluated SIFS (x={x_crevasse}), t={perf_counter()-t0} s')
+        print(f'\t\tKI = {KI}, KII={KII}')
+    return KI, KII
 
 '''
 Convert the mesh
@@ -171,12 +206,13 @@ def convert_mesh(mesh, cell_type, prune_z=False):
 
 
 
-def create_mesh(g):
+def create_mesh(g,n):
     '''
     create_mesh(g)
     g, geometry dictionary 
+    n, a number to append to the mesh filename
 
-    Writes mesh files mesh.msh, mesh.xdmf, and facet_mesh.xdmf for our
+    Writes mesh files mesh_n.msh, mesh_n.xdmf, and facet_mesh_n.xdmf for our
     particular (simple) ice shelf geometry
 
     '''
@@ -186,7 +222,7 @@ def create_mesh(g):
     gmsh.model.occ.addRectangle(g['xf'], g['Hc'], 0.0, 
                                (g['Wx']-g['xf']), g['Hi'], tag=1)
     gmsh.model.occ.addRectangle(0.0,0.0,0.0,g['Wx'],g['Hw'], tag=2)
-    gmsh.model.occ.addRectangle(g['xf']+g['x_crevasse'], 
+    gmsh.model.occ.addRectangle(g['xf']+g['x_crevasse']-g['w_crevasse']/2, 
                                 g['Hi']+g['Hc']-g['h_crevasse'],0.0,
                                 g['w_crevasse'],g['h_crevasse'],tag=3)
     gmsh.model.occ.cut([(2,1)],[(2,3)],tag=4)
@@ -227,24 +263,29 @@ def create_mesh(g):
     distance_field = gmsh.model.mesh.field.add("Distance")
     gmsh.model.mesh.field.setNumbers(distance_field, "EdgesList", [3])
     threshold_field = gmsh.model.mesh.field.add("Threshold")
-    gmsh.model.mesh.field.setNumber(threshold_field, "IField", distance_field)
-    gmsh.model.mesh.field.setNumber(threshold_field, "LcMin", g['min_element_size'])
-    gmsh.model.mesh.field.setNumber(threshold_field, "LcMax", g['max_element_size'])
+    gmsh.model.mesh.field.setNumber(threshold_field, 
+        "IField", distance_field)
+    gmsh.model.mesh.field.setNumber(threshold_field, 
+        "LcMin", g['min_element_size'])
+    gmsh.model.mesh.field.setNumber(threshold_field, 
+        "LcMax", g['max_element_size'])
     gmsh.model.mesh.field.setNumber(threshold_field, "DistMin", 0)
     gmsh.model.mesh.field.setNumber(threshold_field, "DistMax", 100)
     min_field = gmsh.model.mesh.field.add("Min")
-    gmsh.model.mesh.field.setNumbers(min_field, "FieldsList", [threshold_field])
+    gmsh.model.mesh.field.setNumbers(min_field, 
+        "FieldsList", [threshold_field])
     gmsh.model.mesh.field.setAsBackgroundMesh(min_field)
+    gmsh.option.setNumber('General.Verbosity', 2)
 
     gmsh.model.mesh.generate(2)
-    gmsh.write("mesh.msh")
+    gmsh.write(f"mesh_{n}.msh")
     gmsh.finalize()
 
-    mesh_from_file = meshio.read("mesh.msh")
+    mesh_from_file = meshio.read(f"mesh_{n}.msh")
 
     triangle_mesh = convert_mesh(mesh_from_file, "triangle", prune_z=True)
-    meshio.write("mesh.xdmf", triangle_mesh)
+    meshio.write(f"mesh_{n}.xdmf", triangle_mesh)
 
     line_mesh = convert_mesh(mesh_from_file, "line", prune_z=True)
-    meshio.write("facet_mesh.xdmf", line_mesh)
+    meshio.write(f"facet_mesh_{n}.xdmf", line_mesh)
 
