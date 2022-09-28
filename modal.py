@@ -12,12 +12,13 @@ from lefm import sif
 def modal_elasticity_solution(  x_crevasse=100,
                                 verbose=0,
                                 writevtk = True,
-                                deletemesh = True):
+                                deletemesh = True,
+                                open_ocean_wavelength = 200):
     '''
     Carry out a modal elasticity solution. Returns SIFs.
     '''
     if verbose > 0:
-        print(f'Starting simulation with crevasse at {x_crevasse}.')
+        print(f'Starting simulation with crevasse at {x_crevasse} m.')
     t0 = perf_counter()
     n = randint(0,1e6)
  
@@ -34,9 +35,9 @@ def modal_elasticity_solution(  x_crevasse=100,
         'w_crevasse' : 1,
         'x_crevasse' : x_crevasse,
         'gravity' : 9.8,
-        'k' : 2*np.pi/200,
+        'k' : 2*np.pi/open_ocean_wavelength,
         'A' : 1,
-        'max_element_size' : 40,
+        'max_element_size' : 15,
         'min_element_size' : 0.02,
         'Hc':0,
         'omega':0,
@@ -166,7 +167,9 @@ def modal_elasticity_solution(  x_crevasse=100,
     if verbose > 0:
         print(f'\tSolve (x={x_crevasse}) STARTING at '+\
               f't={(perf_counter()-t0):2.1f} s')
-    solve(A, s.vector(), b)
+
+    solve(A, s.vector(), b, 'mumps')
+
     if verbose > 0:
         print(f'\tSolve (x={x_crevasse}) FINISHED at '+\
               f't={(perf_counter()-t0):2.1f} s')
@@ -187,7 +190,7 @@ def modal_elasticity_solution(  x_crevasse=100,
     [KI,KII] = sif(uu,Xc,Yc,Wc,factor,verbose=verbose)
 
     if verbose > 0:
-        print(f'\tEvaluated SIFS (x={x_crevasse}), '+\
+        print(f'\tEvaluated SIFS (x={x_crevasse} m), '+\
               f't={(perf_counter()-t0):2.1f} s')
         print(f'\t\tKI = {KI}, KII={KII}')
     return KI, KII
