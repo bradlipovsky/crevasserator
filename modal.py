@@ -187,7 +187,8 @@ def modal_elasticity_solution(  x_crevasse=100,
     [KI,KII] = sif(uu,Xc,Yc,Wc,factor,verbose=verbose)
 
     if verbose > 0:
-        print(f'\tEvaluated SIFS (x={x_crevasse}), t={perf_counter()-t0} s')
+        print(f'\tEvaluated SIFS (x={x_crevasse}), '+\
+              f't={(perf_counter()-t0):2.1f} s')
         print(f'\t\tKI = {KI}, KII={KII}')
     return KI, KII
 
