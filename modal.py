@@ -37,7 +37,7 @@ def modal_elasticity_solution(  x_crevasse=100,
         'gravity' : 9.8,
         'k' : 2*np.pi/open_ocean_wavelength,
         'A' : 1,
-        'max_element_size' : 20,
+        'max_element_size' : 100,
         'min_element_size' : 0.02,
         'Hc':0,
         'omega':0,
@@ -48,14 +48,15 @@ def modal_elasticity_solution(  x_crevasse=100,
     m['omega'] = np.sqrt(m['gravity']*m['k']*np.tanh(m['k']*m['Hw']))
 
     if verbose > 1:
-        print(f'\tThe swell phase velocity is {m["omega"]/m["k"]} m/s')
-        print(f'\tThe swell wave length is {2*np.pi/m["k"]} m')
-        print(f'\tThe swell wave period is {2*np.pi/m["omega"]} s')
+        print(f'\tSwell properties:\n'+\
+              f'\t\tphase velocity = {m["omega"]/m["k"]} m/s'+\
+              f'\t\twave length    = {2*np.pi/m["k"]} m'+\
+              f'\t\tperiod         = {2*np.pi/m["omega"]} s')
 
     '''
     Make the mesh
     '''
-    create_mesh(m,n)
+    create_mesh(m,n,verbose=verbose)
 
     from dolfin import Mesh, MeshValueCollection, XDMFFile, FiniteElement, Measure, VectorElement, FunctionSpace, TrialFunction, TestFunction, Constant, Expression, split, DirichletBC, sym, grad, Identity, inner, FacetNormal, tr, assemble, solve, Function, near, File
     from dolfin.cpp.mesh import MeshFunctionSizet
@@ -190,7 +191,7 @@ def modal_elasticity_solution(  x_crevasse=100,
     [KI,KII] = sif(uu,Xc,Yc,Wc,factor,verbose=verbose)
 
     if verbose > 0:
-        print(f'\tEvaluated SIFS (x={x_crevasse} m), '+\
+        print(f'\tEvaluated SIFs (x={x_crevasse} m), '+\
               f't={(perf_counter()-t0):2.1f} s')
         print(f'\t\tKI = {KI}, KII={KII}')
     return KI, KII
@@ -211,7 +212,7 @@ def convert_mesh(mesh, cell_type, prune_z=False):
 
 
 
-def create_mesh(g,n):
+def create_mesh(g,n,verbose=0):
     '''
     create_mesh(g)
     g, geometry dictionary 
@@ -221,8 +222,12 @@ def create_mesh(g,n):
     particular (simple) ice shelf geometry
 
     '''
-
     gmsh.initialize()
+    if verbose > 1:
+        gmsh.option.setNumber('General.Verbosity', 2)
+        print('\tCreating mesh.')
+    else:
+        gmsh.option.setNumber('General.Verbosity', 0)
 
     gmsh.model.occ.addRectangle(g['xf'], g['Hc'], 0.0, 
                                (g['Wx']-g['xf']), g['Hi'], tag=1)
@@ -245,6 +250,7 @@ def create_mesh(g,n):
 
     gmsh.model.addPhysicalGroup(2,[fluid_tag],1)
     gmsh.model.addPhysicalGroup(2,solid_tag,2)
+    #gmsh.model.addPhysicalGroup(2,[100],100)
 
     # Label boundaries
     ice_interface = []
@@ -264,7 +270,29 @@ def create_mesh(g,n):
     gmsh.model.addPhysicalGroup(1,ice_interface,4)
     gmsh.model.addPhysicalGroup(1,water_bottom,5)
 
-    # Refine near the crack
+    eps=1.0
+    pt = (g['xf'],g['Hc'])
+    bot = gmsh.model.getEntitiesInBoundingBox( pt[0] - eps,
+                                              pt[1] - eps,
+                                              0.0,
+                                              pt[0] + eps,
+                                              pt[1] +eps,
+                                              0.0,
+                                              0)[0]
+    distance_field0 = gmsh.model.mesh.field.add("Distance")
+    gmsh.model.mesh.field.setNumbers(distance_field0, "PointsList", [bot[1]])
+    threshold_field0 = gmsh.model.mesh.field.add("Threshold")
+    gmsh.model.mesh.field.setNumber(threshold_field0, 
+        "IField", distance_field0)
+    gmsh.model.mesh.field.setNumber(threshold_field0, 
+        "LcMin", 10)
+    gmsh.model.mesh.field.setNumber(threshold_field0, 
+        "LcMax", g['max_element_size'])
+    gmsh.model.mesh.field.setNumber(threshold_field0, 
+        "DistMin", g['Hi'])
+    gmsh.model.mesh.field.setNumber(threshold_field0, 
+        "DistMax", g['Hi']*2)
+    
     distance_field = gmsh.model.mesh.field.add("Distance")
     gmsh.model.mesh.field.setNumbers(distance_field, "EdgesList", [3])
     threshold_field = gmsh.model.mesh.field.add("Threshold")
@@ -274,15 +302,19 @@ def create_mesh(g,n):
         "LcMin", g['min_element_size'])
     gmsh.model.mesh.field.setNumber(threshold_field, 
         "LcMax", g['max_element_size'])
-    gmsh.model.mesh.field.setNumber(threshold_field, "DistMin", 0)
-    gmsh.model.mesh.field.setNumber(threshold_field, "DistMax", 100)
+    gmsh.model.mesh.field.setNumber(threshold_field, 
+        "DistMin", g['w_crevasse']*2)
+    gmsh.model.mesh.field.setNumber(threshold_field, 
+        "DistMax", g['Hi'])
     min_field = gmsh.model.mesh.field.add("Min")
     gmsh.model.mesh.field.setNumbers(min_field, 
-        "FieldsList", [threshold_field])
+        "FieldsList", [threshold_field0, threshold_field])
     gmsh.model.mesh.field.setAsBackgroundMesh(min_field)
-    gmsh.option.setNumber('General.Verbosity', 2)
 
+    # Generate the mesh
     gmsh.model.mesh.generate(2)
+    if verbose > 2:
+        print(f"\t\tWriting mesh_{n}.msh")
     gmsh.write(f"mesh_{n}.msh")
     gmsh.finalize()
 
