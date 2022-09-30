@@ -37,7 +37,7 @@ def modal_elasticity_solution(  x_crevasse=100,
         'gravity' : 9.8,
         'k' : 2*np.pi/open_ocean_wavelength,
         'A' : 1,
-        'max_element_size' : 100,
+        'max_element_size' : 25,
         'min_element_size' : 0.02,
         'Hc':0,
         'omega':0,
@@ -49,9 +49,9 @@ def modal_elasticity_solution(  x_crevasse=100,
 
     if verbose > 1:
         print(f'\tSwell properties:\n'+\
-              f'\t\tphase velocity = {m["omega"]/m["k"]} m/s'+\
-              f'\t\twave length    = {2*np.pi/m["k"]} m'+\
-              f'\t\tperiod         = {2*np.pi/m["omega"]} s')
+              f'\t\tphase velocity = {m["omega"]/m["k"]} m/s\n'+\
+              f'\t\twave length    = {2*np.pi/m["k"]} m\n'+\
+              f'\t\tperiod         = {2*np.pi/m["omega"]} s\n')
 
     '''
     Make the mesh
