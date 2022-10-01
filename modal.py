@@ -8,11 +8,12 @@ from time import perf_counter
 import gmsh # ellpsoid with holes
 import meshio
 from lefm import sif
+import os.path
 
 def modal_elasticity_solution(  x_crevasse=100,
                                 verbose=0,
                                 writevtk = True,
-                                deletemesh = True,
+                                deletemesh = False,
                                 open_ocean_wavelength = 200):
     '''
     Carry out a modal elasticity solution. Returns SIFs.
@@ -20,7 +21,6 @@ def modal_elasticity_solution(  x_crevasse=100,
     if verbose > 0:
         print(f'Starting simulation with crevasse at {x_crevasse} m.')
     t0 = perf_counter()
-    n = randint(0,1e6)
  
     # All the parameters are stored in the dictionary p
     m = {
@@ -39,6 +39,7 @@ def modal_elasticity_solution(  x_crevasse=100,
         'A' : 1,
         'max_element_size' : 25,
         'min_element_size' : 0.02,
+        'ice_front_mesh_size' : 5,
         'Hc':0,
         'omega':0,
         'xf':0
@@ -56,32 +57,36 @@ def modal_elasticity_solution(  x_crevasse=100,
     '''
     Make the mesh
     '''
-    create_mesh(m,n,verbose=verbose)
+    # mesh id number is just the fracture location
+    n = int(x_crevasse)
+    if not os.path.isfile(f"mesh/mesh_{n}.xdmf"):
+        # only create the mesh if it doesn't exist already
+        create_mesh(m,n,verbose=verbose)
 
     from dolfin import Mesh, MeshValueCollection, XDMFFile, FiniteElement, Measure, VectorElement, FunctionSpace, TrialFunction, TestFunction, Constant, Expression, split, DirichletBC, sym, grad, Identity, inner, FacetNormal, tr, assemble, solve, Function, near, File
     from dolfin.cpp.mesh import MeshFunctionSizet
 
     mesh = Mesh()
-    with XDMFFile(f"mesh_{n}.xdmf") as infile:
+    with XDMFFile(f"mesh/mesh_{n}.xdmf") as infile:
         infile.read(mesh)
 
     mvc = MeshValueCollection("size_t", mesh, 2)
-    with XDMFFile(f"mesh_{n}.xdmf") as infile:
+    with XDMFFile(f"mesh/mesh_{n}.xdmf") as infile:
         infile.read(mvc)
     mf = MeshFunctionSizet(mesh, mvc)
 
     mvc2 = MeshValueCollection("size_t", mesh, 1)
-    with XDMFFile(f"facet_mesh_{n}.xdmf") as infile:
+    with XDMFFile(f"mesh/facet_mesh_{n}.xdmf") as infile:
         infile.read(mvc2)
     mf2 = MeshFunctionSizet(mesh, mvc2)
 
     if deletemesh:
         from os import remove
-        remove(f"mesh_{n}.xdmf")
-        remove(f"facet_mesh_{n}.xdmf")
-        remove(f"mesh_{n}.msh")
-        remove(f"mesh_{n}.h5")
-        remove(f"facet_mesh_{n}.h5")
+        remove(f"mesh/mesh_{n}.xdmf")
+        remove(f"mesh/facet_mesh_{n}.xdmf")
+        remove(f"mesh/mesh_{n}.msh")
+        remove(f"mesh/mesh_{n}.h5")
+        remove(f"mesh/facet_mesh_{n}.h5")
 
     '''
     Mark domains/boundaries
@@ -194,6 +199,7 @@ def modal_elasticity_solution(  x_crevasse=100,
         print(f'\tEvaluated SIFs (x={x_crevasse} m), '+\
               f't={(perf_counter()-t0):2.1f} s')
         print(f'\t\tKI = {KI}, KII={KII}')
+
     return KI, KII
 
 '''
@@ -285,7 +291,7 @@ def create_mesh(g,n,verbose=0):
     gmsh.model.mesh.field.setNumber(threshold_field0, 
         "IField", distance_field0)
     gmsh.model.mesh.field.setNumber(threshold_field0, 
-        "LcMin", 10)
+        "LcMin", g['ice_front_mesh_size'])
     gmsh.model.mesh.field.setNumber(threshold_field0, 
         "LcMax", g['max_element_size'])
     gmsh.model.mesh.field.setNumber(threshold_field0, 
@@ -315,14 +321,15 @@ def create_mesh(g,n,verbose=0):
     gmsh.model.mesh.generate(2)
     if verbose > 2:
         print(f"\t\tWriting mesh_{n}.msh")
-    gmsh.write(f"mesh_{n}.msh")
+    gmsh.write(f"mesh/mesh_{n}.msh")
     gmsh.finalize()
 
-    mesh_from_file = meshio.read(f"mesh_{n}.msh")
+    mesh_from_file = meshio.read(f"mesh/mesh_{n}.msh")
 
-    triangle_mesh = convert_mesh(mesh_from_file, "triangle", prune_z=True)
-    meshio.write(f"mesh_{n}.xdmf", triangle_mesh)
+    triangle_mesh = convert_mesh(mesh_from_file, 
+                        "triangle", prune_z=True)
+    meshio.write(f"mesh/mesh_{n}.xdmf", triangle_mesh)
 
     line_mesh = convert_mesh(mesh_from_file, "line", prune_z=True)
-    meshio.write(f"facet_mesh_{n}.xdmf", line_mesh)
+    meshio.write(f"mesh/facet_mesh_{n}.xdmf", line_mesh)
 

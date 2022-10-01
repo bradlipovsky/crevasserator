@@ -9,7 +9,7 @@ def mp_handler():
     t0 = perf_counter()
     nx = 96
     x = np.round(np.logspace(np.log10(10),np.log10(30e3),nx))
-    pool = multiprocessing.Pool(processes=48,maxtasksperchild=1)
+    pool = multiprocessing.Pool(processes=24,maxtasksperchild=1)
     LL = np.round(np.linspace(100,1000,96))
     for L in LL:
         sol = partial(modal_elasticity_solution,
